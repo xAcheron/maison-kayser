@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PruebaController;
 use App\Http\Controllers\RHVacanteController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,4 +19,6 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('prueba', RHVacanteController::class, 'index');
+Route::get('prueba', [PruebaController::class, 'index']);
+Route::get('vacante', [RHVacanteController::class, 'index']);
+

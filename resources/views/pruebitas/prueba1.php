@@ -8,6 +8,6 @@
 </head>
 
 <body>
-  <p>Esta página web es una página HTML válida.</p>
+  <p>Esta prueba para las rutas</p>
 </body>
 </html>
