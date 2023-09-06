@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.pro')
 @include('menu.vacantes', ['seccion' => 'plantilla'])
 @section('content')
 <div class="row" style="margin-bottom: 10px;">

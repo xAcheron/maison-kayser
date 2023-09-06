@@ -102,7 +102,7 @@
                 </div>
                 <ul class="nav">
                     <li id="appmenu" class="nav-item @if (url()->current() == 'http://intranet.prigo.com.mx/home') active @endif">
-                        <a class="nav-link" href="{{ route('home') }}">
+                        <a class="nav-link" href="{{-- route('home') --}}">
                             <i class="material-icons">dashboard</i>
                             <p> {{ empty($data['titulo']) ? 'Aplicaciones' : $data['titulo'] }} </p>
                         </a>

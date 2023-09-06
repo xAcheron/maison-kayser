@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.pro')
 @include('menu.vacantes', ['seccion' => 'index'])
 @section('content')
     <div class="row" style="margin-bottom: 10px;">
@@ -11,7 +11,7 @@
                     <h5 class="card-title">Plantilla Autorizada</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('plantilla') --}}">{{ $autorizados }}</a></h3>
+                    <h3><a href="{{ route('plantilla') }}">{{ $autorizados }}</a></h3>
                 </div>
             </div>
         </div>

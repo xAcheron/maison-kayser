@@ -149,7 +149,7 @@
                         <select name="tipo" id="tipo" class="select2" style="width: 100%">
                             @foreach ($tipoBaja as $item)
                                 <option value="{{ $item->idTipo }}">{{ $item->tipo }}</option>
-                            @endforeach
+                            @endforeach 
                         </select>
                     </div>
                     <div class="form-group text-left">
@@ -197,6 +197,7 @@
                             type: "POST",
                             enctype: 'multipart/form-data',
                             url: "{{ route('guardabaja') }}",
+                            
                             data: data,
                             processData: false,
                             contentType: false,
@@ -233,7 +234,7 @@
             };
             $.ajax({
                 type: "POST",
-                url: "{{ route('getEmployeeDetail') }}",
+                url: "{{ route('getEmployeeDetail') }}",               
                 data: params,
                 success: function(msg) {
                     if (msg.success) {
