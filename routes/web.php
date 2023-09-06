@@ -34,4 +34,31 @@ Route::post('plantilla/editar/agregar', [RHVacanteController::class, 'agregarPue
 Route::post('plantilla/editar/borrar', [RHVacanteController::class, 'borrarPuestoSuc'])->name('borrarPuestoSuc');
 Route::post('plantilla/editar/actualizar/tabla', [RHVacanteController::class, 'actualizarPlantillaTabla'])->name('actualizarPlantillaTabla');
 Route::get('plantilla/download/{idSucursal}', [RHVacanteController::class, 'downloadPlantilla'])->name('xlsPlantilla');
+Route::get('vacantes/consultavacantes', [RHVacanteController::class, 'showRequests'])->name('consultavacantes');
+Route::post('vacantes/exportar', [RHVacanteController::class, 'exportRequest'])->name('exportavacantes');
+Route::post('vacantes/getSolicitudes', [RHVacanteController::class, 'getRequest'])->name('getSolicitudes');
+Route::get('detallevacante/{id?}', [RHVacanteController::class, 'requestDetail'])->name('detallevacante');
+Route::get('vacantes/consultaRetrasadas', [RHVacanteController::class, 'showRetrasadas'])->name('showRetrasadas');
+Route::get('vacantes/consultaEnTiempo', [RHVacanteController::class, 'showEnTiempo'])->name('showEnTiempo');
+Route::get('vacantes/nuevavacante', [RHVacanteController::class, 'showNewRequestForm'])->name('nuevavacante');
+Route::get('vacantes/getEmpleados', [RHVacanteController::class, 'getEmployees'])->name('getEmpleados');
+Route::get('vacantes/listPuestosCrece', [RHVacanteController::class, 'getPuestosGrowup'])->name('getpuestoscrece');
+Route::get('vacantes/listPuestos', [RHVacanteController::class, 'getPuestosList'])->name('getpuestos');
+Route::get('getPuestos', [RHVacanteController::class, 'getPuestos'])->name('getPuestos');
+Route::get('vacantes/validaPuesto', [RHVacanteController::class, 'validaPuesto'])->name('validapuesto');
+Route::get('vacantes/guardasolicitud', [RHVacanteController::class, 'saveRequest'])->name('guardasolicitud');
+//Route::get('vacantes/consultavacantes', [RHVacanteController::class, 'showRequests'])->name('consultavacantes'); <-- La agregue por que estaba viendo los links del menu lateral.
+// Yasser del futuro: Quedaron pendientes los links /vacantes/contrataciones y /vacantes/capacitados
+// Tienes que volver a hacer los submodulos por que se eliminaron hace un tiempo por malos manejos de RH (les daba hueva)
+// P.D. Lo estas haciendo bien amix uwu
+Route::get('vacantes/bajas', [RHVacanteController::class, 'showPendingDismiss'])->name('getBajas');
+Route::get('empleados/baja/get', [RHVacanteController::class, 'getBaja'])->name('getBaja');
+Route::get('vacantes/getSolicitudesBaja', [RHVacanteController::class, 'getDismissRequest'])->name('getSolicitudesBaja');
+Route::get('vacantes/empleados', [RHVacanteController::class, 'showEmployees'])->name('empleados');
+Route::get('empleados/crear/{id?}', [RHVacanteController::class, 'formNewEmployee'])->name('formNewEmployee');
+Route::get('empleados/alta', [RHVacanteController::class, 'uploadXlsxScreen'])->name('uploadXlsx');
+Route::post('empleado/registrar', [RHVacanteController::class, 'registrarEmpleado'])->name('registrarEmpleado');
+Route::get('empleado/{id?}', [RHVacanteController::class, 'employeeDetail'])->name('detalleempleado');
+
+
 

@@ -50,7 +50,7 @@
                     <h5 class="card-title">Solicitudes abiertas</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('consultavacantes') --}}">{{ $abiertas }}</a></h3>
+                    <h3><a href="{{ route('consultavacantes') }}">{{ $abiertas }}</a></h3>
                 </div>
             </div>
         </div>
@@ -63,7 +63,7 @@
                     <h5 class="card-title">Solicitudes retrasadas</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('showRetrasadas') --}}">{{ $retrasadas }}</a></h3>
+                    <h3><a href="{{ route('showRetrasadas') }}">{{ $retrasadas }}</a></h3>
                 </div>
             </div>
         </div>
@@ -76,7 +76,7 @@
                     <h5 class="card-title">Solicitudes en tiempo</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('showEnTiempo') --}}">120{{ $entiempo }}</a></h3>
+                    <h3><a href="{{ route('showEnTiempo') }}">120{{ $entiempo }}</a></h3>
                 </div>
             </div>
         </div>

@@ -18,11 +18,12 @@ class RHVacanteController extends Controller
   {
     $RHRole = 1; //session('RHRole');
     // $sucursales = session('sucursales');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
     $strValSucursales = "";
-    // if ($RHRole != 1)
-    //   if (!empty($sucursales))
-    //     $strValSucursales = " IN (" . $sucursales . ") ";
-    //   else 
+    if ($RHRole != 1)
+    if (!empty($sucursales))
+    $strValSucursales = " IN (" . $sucursales . ") ";
+    else 
     $strValSucursales = " IN (0) ";
 
     // Este fue el de prueba, ya que funciono, lo dejo para futuras pruebas. 
@@ -59,15 +60,16 @@ class RHVacanteController extends Controller
 
     $RHRole = 1;
     //$RHRole = session('RHRole');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
     // $sucursales = session('sucursales');
     // $user = Auth::user();
     // $idEmpresa = $user->idEmpresa;
     $idEmpresa = 1;
-    // $strValSucursales = "";
-    // if ($RHRole != 1)
-    //   if (!empty($sucursales))
-    //     $strValSucursales = "AND idSucursal IN (" . $sucursales . ") ";
-    //   else
+    $strValSucursales = "";
+    if ($RHRole != 1)
+    if (!empty($sucursales))
+    $strValSucursales = "AND idSucursal IN (" . $sucursales . ") ";
+    else
         // $strValSucursales = "AND idSucursal IN (0)";
         $strValSucursales = "AND idSucursal IN (0)";
     $sql = "SELECT autorizado.idSucursal, autorizado.oficina ,autorizado.total autorizado, empleados.empleados, solicitudes.total, solicitudes.atraso, solicitudes.bien, contratacion.contrataciones, bajasMenor.bajaMenor, bajasMayor.bajaMayor FROM 
@@ -655,6 +657,848 @@ class RHVacanteController extends Controller
     //return $idSucursal;
   }
 
+  public function showRequests($tipo = 1)
+  {
+    $tipos = array("Abiertas", "En Tiempo", "Atrasadas");
+    return view('vacantes.showRequests', ["tipo" => $tipo, "titulo" => "Solicitudes " . $tipos[$tipo - 1], 'role' => session('RHRole')]);
+  }
 
+  public function exportRequest(Request $request)
+  {
+    $spreadsheet = new Spreadsheet();
+    $sheet = $spreadsheet->getActiveSheet();
+    $sheet->setCellValue('A1', 'Solicitud');
+    $sheet->setCellValue('B1', 'Fecha');
+    $sheet->setCellValue('C1', 'Sucursal');
+    $sheet->setCellValue('D1', 'Solicita');
+    $sheet->setCellValue('E1', 'Puesto');
+    $sheet->setCellValue('F1', 'Solicitud');
+    $sheet->setCellValue('G1', 'Reclutador');
+    $sheet->setCellValue('H1', 'Estado');
+    $sheet->setCellValue('I1', 'Referencia');
+    $sheet->setCellValue('J1', 'Comentario');
+
+    $idUsuario = Auth::id();
+    $RHRole = session('RHRole');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
+    //$sucursales = session('sucursales');
+    $strValSucursales = "";
+
+    if ($RHRole != 1)
+      if (!empty($sucursales))
+        $strValSucursales = " IN (" . $sucursales . ") ";
+      else
+        $strValSucursales = " IN (0) ";
+
+    $puesto = !empty($request->input('findPuesto')) ? $request->input('findPuesto') : "";
+    $sucursal = !empty($request->input('findSucursal')) ? $request->input('findSucursal') : "";
+    $tipo = !empty($request->input('tipo')) ? $request->input('tipo') : 1;
+
+    $strBusca =  "";
+    $strAtraso = "";
+
+    $busca = array();
+
+    if (!empty($sucursal))
+      $busca[] = " rh_o.nombre LIKE '%" . $sucursal . "%' ";
+    if (!empty($puesto))
+      $busca[] = " rh_p.nombre LIKE '%" . $puesto . "%' ";
+
+    if (!empty($busca)) {
+      $strBusca = " AND " . implode(" AND ", $busca);
+    }
+
+    if (!empty($tipo) && $tipo != 1) {
+      $strAtraso .= " atraso = " . ($tipo == 2 ? 1 : 0);
+    }
+
+    $items =    DB::select("SELECT * FROM ( SELECT rh_vsp.idSolicitud, IF(rh_vsp.solicitud =1,'Cubrir Vacante','Reemplazo') AS solicitud , rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, estado.estado, rh_rec.nombre AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN sucursales AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado  LEFT JOIN rh_reclutador_sucursal rh_recsuc ON rh_recsuc.idSucursal = rh_vsp.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN rh_reclutador rh_rec ON rh_rec.idReclutador = rh_recsuc.idReclutador WHERE NOT(rh_vsp.estado IN(4,5) ) " . ($RHRole != 1 ? " AND rh_vsp.idSucursal " . $strValSucursales : "") . " " . $strBusca . ") AS datos " . (empty($strAtraso) ? "" : " WHERE $strAtraso") . ";");
+
+    $row = 2;
+    foreach ($items as $item) {
+      $sheet->setCellValue('A' . $row, $item->idSolicitud);
+      $sheet->setCellValue('B' . $row, $item->fechaCrea);
+      $sheet->setCellValue('C' . $row, $item->sucursal);
+      $sheet->setCellValue('D' . $row, "");
+      $sheet->setCellValue('E' . $row, $item->puesto);
+      $sheet->setCellValue('F' . $row, $item->solicitud);
+      $sheet->setCellValue('G' . $row, $item->reclutador);
+      $sheet->setCellValue('H' . $row, $item->estado);
+      $sheet->setCellValue('I' . $row, "");
+      $sheet->setCellValue('J' . $row, "");
+      $row++;
+    }
+
+    $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, "Xlsx");
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="vacantes_' . date("Ymd") . '.xlsx"');
+    $writer->save("php://output");
+  }
+
+  public function getRequest(Request $request)
+  {
+    $idUsuario = Auth::id();
+    $RHRole = session('RHRole');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
+    //$sucursales = session('sucursales');
+    $strValSucursales = "";
+    $strStatus = "";
+    if ($RHRole != 1)
+      if (!empty($sucursales))
+        $strValSucursales = " IN (" . $sucursales . ") ";
+      else
+        $strValSucursales = " IN (0) ";
+
+    $draw = !empty($request->input('draw')) ? $request->input('draw') : 1;
+    $start = !empty($request->input('start')) ? $request->input('start') : 0;
+    $length = !empty($request->input('length')) ? $request->input('length') : 10;
+    $queryarr = !empty($request->input('search')) ? $request->input('search') : array();
+    $query = !empty($queryarr["value"]) ? $queryarr["value"] : "";
+    $allitems = null;
+    $strBusca =  "";
+    $strAtraso = "";
+
+    if (!empty($request->input('columns'))) {
+      $cols = $request->input('columns');
+      $busca = array();
+      foreach ($cols as $col) {
+        if (!empty($col["search"]["value"])) {
+          switch ($col["data"]) {
+            case "puesto":
+              $busca[] = " rh_p.nombre LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+            case "sucursal":
+              $busca[] = " rh_o.nombre LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+          }
+        }
+      }
+      if (!empty($busca)) {
+        $strBusca = " AND " . implode(" AND ", $busca);
+      }
+    }
+
+    if (!empty($request->input('tipo')) && ($request->input('tipo') == 2 || $request->input('tipo') == 3)) {
+      $strAtraso .= " atraso = " . ($request->input('tipo') == 2 ? 1 : 0);
+    } else if (!empty($request->input('tipo')) && $request->input('tipo') == 4) {
+      $strStatus = "4";
+    } else if (!empty($request->input('tipo')) && $request->input('tipo') == 5) {
+      $strStatus = "9";
+    }
+
+    $orden = " datos.fechaCrea DESC ";
+    if (!empty($request->input('order'))) {
+      $ordena = $request->input('order');
+      $orden = "";
+      switch ($ordena[0]["column"]) {
+        case 0:
+          $orden = " datos.idSolicitud " . $ordena[0]["dir"];
+          break;
+        case 1:
+          $orden = " datos.fechaCrea " . $ordena[0]["dir"];
+          break;
+        case 2:
+          $orden = " datos.sucursal " . $ordena[0]["dir"];
+          break;
+        case 3:
+          $orden = " datos.puesto  " . $ordena[0]["dir"];
+          break;
+        case 4:
+          $orden = " datos.solicitud " . $ordena[0]["dir"];
+          break;
+        case 5:
+          $orden = " datos.reclutador  " . $ordena[0]["dir"];
+          break;
+        case 6:
+          $orden = " datos.estado  " . $ordena[0]["dir"];
+          break;
+        default:
+          $orden = " datos.fechaCrea DESC ";
+          break;
+      }
+    }
+
+    //TODO: Checar que pasa cuando no existe tiempo de contratacion para algun puesto, podemos poner default 8 dias  atodos los peustos nuevos
+    $allitems = DB::select("SELECT idSolicitud FROM ( SELECT rh_vsp.idSolicitud FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN sucursales AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado  INNER JOIN rh_vacante_tipo ON rh_vsp.solicitud = rh_vacante_tipo.idTipo LEFT JOIN rh_sucursal_usuario rh_recsuc ON rh_vsp.idSucursal = rh_recsuc.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN users rh_rec ON rh_rec.id = rh_recsuc.idUsuario WHERE " . (empty($strStatus) ? "NOT(rh_vsp.estado IN(4,5,6,9,8) )" : " rh_vsp.estado = " . $strStatus) . " " . (($RHRole != 1  && $RHRole != 4) ? " AND rh_vsp.idSucursal " . $strValSucursales : "") . " " . $strBusca . ") AS datos " . (empty($strAtraso) ? "" : " WHERE $strAtraso") . " GROUP BY idSolicitud ;");
+
+    //$items = DB::select("SELECT * FROM ( SELECT rh_vsp.idSolicitud, IF(rh_vsp.solicitud =1,'Cubrir Vacante','Reemplazo') AS solicitud , rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, estado.estado, rh_rec.nombre AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN rh_oficinas AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado  LEFT JOIN rh_reclutador_sucursal rh_recsuc ON rh_recsuc.idSucursal = rh_vsp.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN rh_reclutador rh_rec ON rh_rec.idReclutador = rh_recsuc.idReclutador WHERE ". (empty($strStatus)?"NOT(rh_vsp.estado IN(4,5,6,9,8) )": " rh_vsp.estado = ".$strStatus)." ".(($RHRole != 1  && $RHRole !=4) ?" AND rh_vsp.idSucursal ".$strValSucursales:"")." ".$strBusca.") AS datos ".(empty($strAtraso)?"":" WHERE $strAtraso")."  ORDER BY $orden LIMIT ".$start.", ".$length.";");
+    $sql = "SELECT * FROM ( SELECT rh_vsp.idSolicitud FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN sucursales AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado  INNER JOIN rh_vacante_tipo ON rh_vsp.solicitud = rh_vacante_tipo.idTipo LEFT JOIN rh_sucursal_usuario rh_recsuc ON rh_vsp.idSucursal = rh_recsuc.idSucursal INNER JOIN config_app_access ON (rh_recsuc.idUsuario = config_app_access.idUsuario AND  config_app_access.idRole IN (1,2,3,4) AND config_app_access.idAplicacion = 3) INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN users rh_rec ON rh_rec.id = rh_recsuc.idUsuario WHERE " . (empty($strStatus) ? "NOT(rh_vsp.estado IN(4,5,6,9,8) )" : " rh_vsp.estado = " . $strStatus) . " " . (($RHRole != 1  && $RHRole != 4) ? " AND rh_vsp.idSucursal " . $strValSucursales : "") . " " . $strBusca . ") AS datos " . (empty($strAtraso) ? "" : " WHERE $strAtraso") . " ;";
+    $items = DB::select("SELECT idSolicitud,  solicitud, sucursal, fechaCrea, limite, lastUpdateDate, atraso, puesto, comentario, estado, GROUP_CONCAT(reclutador) reclutador FROM ( SELECT rh_vsp.idSolicitud, rh_vacante_tipo.tipo AS solicitud , rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, estado.estado, rh_rec.name AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN sucursales AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado  INNER JOIN rh_vacante_tipo ON rh_vsp.solicitud = rh_vacante_tipo.idTipo LEFT JOIN rh_sucursal_usuario rh_recsuc ON rh_vsp.idSucursal = rh_recsuc.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN users rh_rec ON rh_rec.id = rh_recsuc.idUsuario WHERE " . (empty($strStatus) ? "NOT(rh_vsp.estado IN(4,5,6,9,8) )" : " rh_vsp.estado = " . $strStatus) . " " . (($RHRole != 1  && $RHRole != 4) ? " AND rh_vsp.idSucursal " . $strValSucursales : "") . " " . $strBusca . ") AS datos " . (empty($strAtraso) ? "" : " WHERE $strAtraso") . " GROUP BY idSolicitud,  solicitud, sucursal,fechaCrea, limite, lastUpdateDate, atraso, puesto, comentario, estado ORDER BY $orden LIMIT " . $start . ", " . $length . ";");
+
+    return  response()->json([
+      'draw' => $draw,
+      'recordsTotal' => count($allitems),
+      'recordsFiltered' => count($allitems),
+      'data' => $items,
+      'sql' => $sql
+    ]);
+  }
+
+  public function requestDetail($id)
+  {
+    $RHRole = 1;
+    //$RHRole = session('RHRole');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
+    $strValSucursales = "";
+    if ($RHRole != 1)
+      if (!empty($sucursales))
+        $strValSucursales = " IN (" . $sucursales . ") ";
+      else
+        $strValSucursales = " IN (0) ";
+
+    $solicitud = DB::select("SELECT rh_vacante_solicitud.idSolicitud, users.name nombre, rh_vacante_solicitud.fechaCrea AS fecha, rh_vacante_solicitud.estado, rh_vacante_solicitud.comentario FROM rh_vacante_solicitud INNER JOIN users ON users.id = rh_vacante_solicitud.idUsuario WHERE rh_vacante_solicitud.idSolicitud = '" . $id . "';");
+    $partidas = DB::select("SELECT tipo.tipo solicitud, estado.estado, estado.idEstado, rh_vsp.idSolicitud, rh_vsp.idPartida, rh_vs.fechaCrea, rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, CONCAT(rh_empleado.nombre, ' ',rh_empleado.apellido_pat, ' ',rh_empleado.apellido_mat) as nombre , CONCAT(contratado.nombre, ' ', contratado.apellido_pat, ' ', contratado.apellido_mat) as contratado FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN sucursales AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_tipo tipo ON tipo.idTipo = rh_vsp.solicitud INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado LEFT JOIN rh_empleado ON rh_empleado.idEmpleado = rh_vsp.idEmpleado  LEFT JOIN rh_empleado as contratado ON contratado.idEmpleado = rh_vsp.idContratado WHERE rh_vsp.idSolicitud = '" . $id . "' " . (($RHRole != 1 && $RHRole != 4) ? " AND rh_vsp.idSucursal " . $strValSucursales : "") . ";");
+
+    return view('vacantes.detalle', ['solicitud' => $solicitud[0], 'partidas' => $partidas, 'role' => session('RHRole')]);
+  }
+
+  public function showRetrasadas()
+  {
+    //$RHRole = session('RHRole');
+    $RHRole = 1;
+    //$sucursales = session('sucursales');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
+    $tipo = 2;
+    $tipos = array("Abiertas", "En Tiempo", "Atrasadas");
+    return view('vacantes.showRequests', ["tipo" => $tipo, 'role' => $RHRole, 'sucursales' => $sucursales, "titulo" => "Solicitudes " . $tipos[$tipo - 1]]);
+  }
+
+  public function showEnTiempo()
+  {
+    $RHRole = session('RHRole');
+    $sucursales = session('sucursales');
+    $tipo = 3;
+    $tipos = array("Abiertas", "En Tiempo", "Atrasadas");
+    return view('vacantes.showRequests', ["tipo" => $tipo, 'role' => session('RHRole'), 'sucursales' => $sucursales, "titulo" => "Solicitudes " . $tipos[$tipo - 1]]);
+  }
+
+  public function showNewRequestForm()
+  {
+    //$RHRole = session('RHRole');
+    $RHRole = 1;
+    //$sucursales = session('sucursales');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
+    $strValSucursales = "";
+    if ($RHRole != 1)
+      if (!empty($sucursales))
+        $strValSucursales = " IN (" . $sucursales . ") ";
+      else
+        $strValSucursales = " IN (0) ";
+
+    $sucursales = DB::select("SELECT id AS idSucursal, nombre FROM sucursales WHERE estado = 1 " . ($RHRole != 1 ? "AND id " . $strValSucursales : "") . " ORDER BY nombre;");
+    $trsucursales = DB::select("SELECT id AS idSucursal, nombre FROM sucursales WHERE estado = 1 ORDER BY nombre;");
+    return view('vacantes.newRequest', ['sucursales' => $sucursales, 'trsucursales' => $trsucursales, 'role' => session('RHRole')]);
+  }
+
+  public function getEmployees(Request $request)
+  {
+    //$idUsuario = Auth::id();
+    //$RHRole = session('RHRole');
+    $RHRole = 1;
+    //$sucursales = session('sucursales');
+    $sucursales = DB::select("SELECT s.id FROM sucursales AS s;");
+    $strValSucursales = "";
+    $strStatus = "";
+    if ($RHRole != 1)
+      if (!empty($sucursales))
+        $strValSucursales = " IN (" . $sucursales . ") ";
+      else
+        $strValSucursales = " IN (0) ";
+
+    $draw = !empty($request->input('draw')) ? $request->input('draw') : 1;
+    $start = !empty($request->input('start')) ? $request->input('start') : 0;
+    $length = !empty($request->input('length')) ? $request->input('length') : 10;
+    $queryarr = !empty($request->input('search')) ? $request->input('search') : array();
+    $query = !empty($queryarr["value"]) ? $queryarr["value"] : "";
+    $allitems = null;
+    $strBusca =  "";
+
+    if (!empty($request->input('columns'))) {
+      $cols = $request->input('columns');
+      $busca = array();
+      foreach ($cols as $col) {
+        if (!empty($col["search"]["value"])) {
+          switch ($col["data"]) {
+            case "nombre":
+              if (!empty($col["search"]["value"]))
+                $busca[] = " CONCAT(rh_e.nombre, ' ',rh_e.apellido_pat, ' ',rh_e.apellido_mat) LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+            case "puesto":
+              if (!empty($col["search"]["value"]))
+                $busca[] = " rh_p.nombre LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+            case "sucursal":
+              if (!empty($col["search"]["value"]))
+                $busca[] = " rh_o.nombre LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+          }
+        }
+      }
+      if (!empty($busca)) {
+        $strBusca = " AND " . implode(" AND ", $busca);
+      }
+    }
+
+    $orden = " datos.nombre DESC ";
+    if (!empty($request->input('order'))) {
+      $ordena = $request->input('order');
+      $orden = "";
+      switch ($ordena[0]["column"]) {
+        case 0:
+          $orden = " datos.idEmpleado " . $ordena[0]["dir"];
+          break;
+        case 1:
+          $orden = " CONCAT(datos.nombre, ' ',datos.apellido_pat, ' ',datos.apellido_mat) " . $ordena[0]["dir"];
+          break;
+        case 2:
+          $orden = " datos.sucursal " . $ordena[0]["dir"];
+          break;
+        case 3:
+          $orden = " datos.puesto  " . $ordena[0]["dir"];
+          break;
+      }
+    }
+
+    //TODO: Checar que pasa cuando no existe tiempo de contratacion para algun puesto, podemos poner default 8 dias  atodos los peustos nuevos
+    //$allitems = DB::select("SELECT * FROM ( SELECT rh_vsp.idSolicitud, rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso  , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, rh_rec.nombre AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN rh_oficinas AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN rh_reclutador_sucursal rh_recsuc ON rh_recsuc.idSucursal = rh_vsp.idSucursal LEFT JOIN rh_reclutador rh_rec ON rh_rec.idReclutador = rh_recsuc.idReclutador WHERE ". (empty($strStatus)?"NOT(rh_vsp.estado IN(4,5,6,9,8) )": " rh_vsp.estado = ".$strStatus)." ".(($RHRole != 1 && $RHRole !=4 ) ?" AND rh_vsp.idSucursal ".$strValSucursales:"")." ".$strBusca.") AS datos ".(empty($strAtraso)?"":" WHERE $strAtraso")." ;");
+    $allitems = DB::select("SELECT * FROM ( SELECT rh_e.idEmpleado FROM rh_empleado AS rh_e INNER JOIN rh_empleado_estado AS rh_e_e ON rh_e.estado = rh_e_e.idEstado INNER JOIN sucursales AS rh_o ON rh_o.id = rh_e.idSucursal LEFT JOIN rh_puesto AS rh_p ON rh_e.idPuesto = rh_p.idPuesto  " . (($RHRole != 1 && $RHRole != 4) ? " WHERE rh_e.idSucursal " . $strValSucursales : "") . " " . $strBusca . ") AS datos");
+    //$sql = "SELECT * FROM ( SELECT rh_e.idEmpleado, CONCAT(rh_e.nombre, ' ',rh_e.apellido_pat, ' ',rh_e.apellido_mat) as nombre, rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_e_e.nombre as estado, rh_e.idPuesto FROM rh_empleado AS rh_e INNER JOIN rh_empleado_estado AS rh_e_e ON rh_e.estado = rh_e_e.idEstado INNER JOIN sucursales AS rh_o ON rh_o.id = rh_e.idSucursal LEFT JOIN rh_puesto AS rh_p ON rh_e.idPuesto = rh_p.idPuesto WHERE " . (($RHRole != 1 && $RHRole != 4) ? "  rh_e.idSucursal " . $strValSucursales : " 1=1 ") . " " . $strBusca . "GROUP BY rh_e.idPuesto,idEmpleado, rh_o.nombre, rh_p.nombre , rh_e_e.nombre, rh_e.nombre,rh_e.apellido_pat,rh_e.apellido_mat) AS datos ORDER BY $orden LIMIT " . $start . ", " . $length . ";";
+    //dd($sql);
+    $items = DB::select("SELECT * FROM ( SELECT rh_e.idEmpleado, CONCAT(rh_e.nombre, ' ',rh_e.apellido_pat, ' ',rh_e.apellido_mat) as nombre, rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_e_e.nombre as estado, rh_e.idPuesto FROM rh_empleado AS rh_e INNER JOIN rh_empleado_estado AS rh_e_e ON rh_e.estado = rh_e_e.idEstado LEFT JOIN sucursales AS rh_o ON rh_o.id = rh_e.idSucursal LEFT JOIN rh_puesto AS rh_p ON rh_e.idPuesto = rh_p.idPuesto WHERE " . (($RHRole != 1 && $RHRole != 4) ? " rh_e.idSucursal " . $strValSucursales : " 1=1 ") . " " . $strBusca . " GROUP BY rh_e.idPuesto,idEmpleado, rh_o.nombre, rh_p.nombre , rh_e_e.nombre, rh_e.nombre,rh_e.apellido_pat,rh_e.apellido_mat) AS datos ORDER BY $orden LIMIT " . $start . ", " . $length . ";");
+
+    return  response()->json([
+      'draw' => $draw,
+      'recordsTotal' => count($allitems),
+      'recordsFiltered' => count($allitems),
+      'data' => $items
+    ]);
+  }
+
+  public function getPuestosGrowup(Request $request)
+  {
+    $puestos = DB::select("SELECT rh_puesto.idPuesto id, rh_puesto.nombre FROM rh_plazas_autorizadas INNER JOIN rh_puesto ON rh_plazas_autorizadas.idPuesto = rh_puesto.idPuesto WHERE rh_puesto.estado = 1 AND  rh_plazas_autorizadas.idSucursal = ? ORDER BY rh_puesto.nombre ASC; ", [$request->input('sucursal')]);
+
+    if (!empty($puestos[0])) {
+      return  response()->json([
+        'data' => $puestos
+      ]);
+    } else {
+      return  response()->json([
+        'tipo' => 0,
+        'data' => []
+      ]);
+    }
+  }
+
+  public function getPuestosList(Request $request)
+  {
+    $puestos = DB::select("SELECT rh_puesto.idPuesto id, rh_puesto.nombre FROM rh_puesto_area INNER JOIN rh_puesto ON rh_puesto.idPuesto = rh_puesto_area.idPuesto WHERE estado = 1 AND idArea = " . $request->input('id')); // AND idArea = " . $request->input('id'));
+    if (!empty($puestos[0])) {
+      return  response()->json([
+        'data' => $puestos
+      ]);
+    } else {
+      return  response()->json([
+        'tipo' => 0,
+        'data' => []
+      ]);
+    }
+  }
+
+  public function getPuestos(Request $request)
+  {
+    $idSucursal = $request->input('idSucursal');
+
+    if (!empty($idSucursal)) {
+      $puestos = DB::select("SELECT aut.idPuesto, puesto.nombre puesto, puesto.orden, aut.cantidad, COUNT(B.idEmpleado) AS ocupado FROM rh_plazas_autorizadas aut 
+				LEFT JOIN rh_puesto puesto ON aut.idPuesto = puesto.idPuesto
+				LEFT JOIN rh_empleado AS B ON (puesto.idPuesto = B.idPuesto AND B.idSucursal = ? AND B.estado != 6)
+				WHERE cantidad > 0 AND aut.idSucursal = ?
+				GROUP BY aut.idPuesto, puesto.nombre, puesto.orden, aut.cantidad
+				ORDER BY puesto.orden, puesto.nombre", [$idSucursal, $idSucursal]);
+
+      $puestosArr = [];
+      if (!empty($puestos)) {
+
+        foreach ($puestos as $key => $value) {
+          if ($value->cantidad > $value->ocupado) {
+            $puestosArr[] = $value;
+          }
+        }
+      }
+
+      return response()->json([
+        'success' => true,
+        'data' => $puestosArr
+      ]);
+    }
+  }
+
+  public function validaPuesto(Request $request)
+  {
+
+    $disponibles = DB::select("SELECT if(empleados.total is NULL, 0 , empleados.total) total, plazas.autorizados, if(sols.cantidad is NULL, 0 , sols.cantidad) solicitudes, (plazas.autorizados - if(empleados.total is NULL, 0 , empleados.total)- if(sols.cantidad is NULL, 0 , sols.cantidad)) AS diferencia  FROM ( SELECT estado, idPuesto, SUM(cantidad) autorizados FROM rh_plazas_autorizadas WHERE estado = 1 AND idPuesto = " . $request->input('idPuesto') . " AND idSucursal = " . $request->input('idSucursal') . " GROUP BY estado , idPuesto ) plazas LEFT JOIN ( SELECT rh_empleado.estado, idPuesto, COUNT(rh_empleado.estado) total FROM rh_empleado INNER JOIN sucursales ON rh_empleado.idSucursal = sucursales.id WHERE rh_empleado.estado = 1 AND idPuesto = " . $request->input('idPuesto') . " AND idSucursal = " . $request->input('idSucursal') . " GROUP BY rh_empleado.estado, idPuesto ) empleados ON empleados.estado = plazas.estado LEFT JOIN (SELECT idPuesto, COUNT(idPuesto) cantidad FROM  rh_vacante_solicitud_partida WHERE idPuesto = " . $request->input('idPuesto') . " AND solicitud =1 AND idSucursal = " . $request->input('idSucursal') . " AND estado = 1 GROUP BY idPuesto) sols ON sols.idPuesto = plazas.idPuesto;");
+
+    $cantidad = 0;
+
+    if (!empty($disponibles[0])) {
+      if (!empty($disponibles[0]->diferencia) && $disponibles[0]->diferencia > 0)
+        $cantidad = $disponibles[0]->diferencia;
+    }
+
+    $sql = "SELECT rh_empleado.idEmpleado as id, rh_empleado.nombre FROM rh_empleado WHERE rh_empleado.estado = 1 AND idPuesto = " . $request->input('idPuesto') . " AND idSucursal = " . $request->input('idSucursal') . ";";
+
+    $empleados = DB::select($sql);
+
+    return  response()->json(['disponibles' => $cantidad, 'empleados' => $empleados]);
+  }
+
+  public function saveRequest(Request $request = null, $sucursales = null, $trsucursales = null, $areas = null, $deptos = null, $acciones = null, $empleados = null, $nvoPuesto = null, $ids = null, $estado = null)
+  {
+    DB::enableQueryLog();
+    $user = Auth::user();
+    $idUsuario = $user->id;
+    $uemail = $user->email;
+    $uname = $user->name;
+    if ($request != null) {
+      $ids = $request->input('id');
+      $sucursales = $request->input('idSucursal');
+      $trsucursales = $request->input('transucId');
+      $areas = $request->input('idArea');
+      $deptos = $request->input('idDepto');
+      $acciones = $request->input('accion');
+      $empleados = $request->input('empleado');
+      $comentario = $request->input('comentario');
+      $nvoPuesto = $request->input('nvoPuesto');
+      $empleadoBaja = $request->input('empleadoBaja');
+    }
+
+    if (!empty($sucursales)) {
+      $comentario = empty($comentario) ? "" : $comentario;
+      DB::insert('insert into rh_vacante_solicitud (idUsuario, fechaCrea, horaCrea, comentario) values (?, ?, ?, ?)', [$idUsuario, date("Y-m-d"), date("H:i:s"), $comentario]);
+      $lid = DB::getPdo()->lastInsertId();
+      $sql = "";
+      $sqlBajas = "";
+      $sqlNvoPuesto = array();
+      if (!empty($lid)) {
+        foreach ($empleados as $id => $value) {
+
+          // if($request != null){
+          $sql = "SELECT A.idSucursal, A.idPuesto, B.idArea FROM rh_empleado AS A INNER JOIN rh_puesto_area AS B ON A.idPuesto = B.idPuesto INNER JOIN rh_area AS C ON B.idArea = C.id WHERE idEmpleado = ?";
+          $datos = DB::select($sql, [$value]);
+
+          if (!empty($datos)) {
+            $idPuesto = $datos[0]->idPuesto;
+            $areas[$id] = $datos[0]->idArea;
+            $deptos[$id] = 0;
+          } else {
+            $idPuesto = 0;
+            $areas[$id] = 0;
+            $deptos[$id] = 0;
+          }
+          // }
+          if ($acciones[$id] == 3 || $acciones[$id] == 5) {
+            $idPuesto = $nvoPuesto[$id];
+          }
+          $sql = '';
+          if (!empty($sql))
+            $sql .= ", ";
+
+
+          if ($acciones[$id] == 10) {
+            // $idPuesto = DB::select("SELECT idPuesto FROM rh_empleado WHERE idEmpleado = " . (empty($empleados[$id])?0:$empleados[$id]));
+            if (!empty($sql))
+              $sql .= ", ";
+            $sql .= "( " . $lid . " ," . $idPuesto . ", " . $sucursales[$id] . ", " . $trsucursales[$id] . ", " . $areas[$id] . ", " . $deptos[$id] . ", 1 ,  0 ,   1  ,'" . date("Y-m-d") . "','" . date("H:i:s") . "'," . $idUsuario . ", '" . date("Y-m-d") . "', 0)";
+            $sql .= ",( " . $lid . " ," . $nvoPuesto[$id] . ", " . $sucursales[$id] . ", " . $trsucursales[$id] . ", " . $areas[$id] . ", " . $deptos[$id] . ", " . $acciones[$id] . ", " . (empty($empleados[$id]) ? 0 : $empleados[$id]) . ",6,'" . date("Y-m-d") . "','" . date("H:i:s") . "'," . $idUsuario . ", '" . date("Y-m-d") . "', " . (empty($empleados[$id]) ? 0 : $empleados[$id]) . " )";
+
+            $sqlNvoPuesto[] = "UPDATE rh_empleado SET idPuesto= " . $nvoPuesto[$id] . " WHERE idEmpleado = " . (empty($empleados[$id]) ? 0 : $empleados[$id]);
+
+            // if (!empty($empleadoBaja[$id])) {
+            // 	$auxEmpBaja = explode("|", $empleadoBaja[$id]);	
+            // 	if ($auxEmpBaja[0] == 1 && !empty($auxEmpBaja[1])) {
+            // 		if (!empty($sqlBajas))
+            // 			$sqlBajas .= ", ";
+            // 		$sqlBajas .= $empleados[$id];
+            // 	} else if ($auxEmpBaja[0] == 4 && !empty($auxEmpBaja[1])) {
+            // 		$sqlNvoPuesto[] = "UPDATE rh_empleado SET idPuesto=" . $auxEmpBaja[1] . " WHERE id = " . $empleados[$id];
+            // 	} else if (!empty($auxEmpBaja[1])) {
+            // 		$sqlNvoPuesto[] = "UPDATE rh_vacante_solicitud_partida SET estado = 6 ,idContratado= " . $empleados[$id] . " WHERE idPartida = " . $auxEmpBaja[1];
+            // 	}
+            // }
+          } else {
+            $estadoP = !empty($estado) ? $estado[$id] : '1';
+
+            $sql .= "( " . $lid . " ," . $idPuesto . ", " . $sucursales[$id] . ", " . $trsucursales[$id] . ", " . $areas[$id] . ", " . $deptos[$id] . ", " . $acciones[$id] . ", " . (empty($empleados[$id]) ? 0 : $empleados[$id]) . ",'" . $estadoP . "','" . date("Y-m-d") . "','" . date("H:i:s") . "'," . $idUsuario . ", '" . date("Y-m-d") . "', 0)";
+
+            if (($acciones[$id] == 6 || $acciones[$id] == 2) && !empty($empleados[$id])) {
+              if (!empty($sqlBajas))
+                $sqlBajas .= ", ";
+              $sqlBajas .= $empleados[$id];
+            }
+          }
+        }
+        if (!empty($sql)) {
+          DB::insert('insert into rh_vacante_solicitud_partida (idSolicitud, idPuesto, idSucursal, idSucursalTrans, idArea, idDepartamento, solicitud , idEmpleado,estado,lastUpdateDate, lastUpdateTime, idUserUpdate, ingreso, idContratado) values ' . $sql);
+
+          if (!empty($sqlBajas))
+            $affected = DB::update('update rh_empleado set estado = 2 , fechaSolBaja= "' . date('Y-m-d') . '", horaSolBaja= "' . date('H:i:s') . '" where idEmpleado IN (' . $sqlBajas . ")");
+
+          if (!empty($sqlNvoPuesto))
+            foreach ($sqlNvoPuesto as $evsql)
+              $affected = DB::update($evsql);
+          if (!empty($lid)) {
+            $sql = "SELECT RHR.email FROM users RHR INNER JOIN rh_sucursal_usuario RHRS ON RHR.id = RHRS.idUsuario INNER JOIN config_app_access RHAC ON RHAC.idUsuario = RHR.id INNER JOIN rh_vacante_solicitud_partida RHRP ON RHRP.idSucursal = RHRS.idSucursal WHERE RHAC.idAplicacion=3 AND RHAC.idRole = 2 and  RHRP.idSolicitud = " . $lid . " GROUP BY RHR.email;";
+            $reclutadores = DB::select($sql);
+            $recArray = array();
+            foreach ($reclutadores as $rec) {
+              $recArray[] = $rec->email;
+            }
+            $recArray[] = "apiana@prigo.com.mx";
+            $recArray[] = "emarin@prigo.com.mx";
+            $recArray[] = "rgallardo@prigo.com.mx";
+            $recArray[] = "ntorres@prigo.com.mx";
+            $url = url('/detallevacante/' . $lid);
+
+            $partidas = DB::select("SELECT tipo.idTipo, tipo.tipo solicitud, estado.estado, rh_vsp.idSolicitud, rh_vsp.idPartida, rh_vs.fechaCrea, rh_o.nombre AS sucursal, rh_o2.nombre AS transferencia,  rh_p.nombre AS puesto, rh_vs.comentario, rh_empleado.nombre FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN sucursales AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_tipo tipo ON tipo.idTipo = rh_vsp.solicitud INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado LEFT JOIN rh_empleado ON rh_empleado.idEmpleado = rh_vsp.idEmpleado LEFT JOIN sucursales AS rh_o2 ON rh_o2.id = rh_vsp.idSucursalTrans WHERE rh_vsp.idSolicitud = '" . $lid . "';");
+
+            $sqlAut = "";
+
+            foreach ($partidas as $partida) {
+              if ($partida->idTipo == 4 || $partida->idTipo == 5 || $partida->idTipo == 3) {
+                if (!empty($sqlAut))
+                  $sqlAut .= ", ";
+                $sqlAut .= "(" . $lid . ", " . $partida->idPartida . ",0," . $partida->idTipo . " )";
+              }
+            }
+
+            if (!empty($sqlAut))
+              DB::insert('insert into rh_vacante_solicitud_autorizacion (idSolicitud, idPartida, idAutoriza, tipoSolicitud ) values ' . $sqlAut);
+
+            // Mail::send('vacantes.mailVacante', ['url' => $url,'name' => $uname, 'partidas' => $partidas, 'comentario' => $comentario], function ($message) use ($recArray)
+            // {
+            // 	$message->from('reportes@prigo.com.mx', 'Reportes PRIGO');
+            // 	$message->to($recArray);
+            // 	$message->subject("Nueva solicitud de reclutamiento recibida");
+            // });
+
+            return $lid;
+          } else {
+            return "{ 'success': false, 'msg': 'Error al guardar los datos!'}";
+          }
+        }
+      }
+    }
+  }
+
+  public function showPendingDismiss()
+  {
+    $tipo = 6;
+    $sql = "SELECT * FROM rh_baja_tipo";
+    $tiposBaja = DB::select($sql);
+    return view('vacantes.showDismissRequests', ["tipo" => $tipo, "titulo" => "Bajas", 'role' => session('RHRole'), 'tipoBaja' => $tiposBaja]);
+  }
+
+  public function getBaja(Request $request)
+  {
+    $idBaja = $request->input('idBaja');
+    $idEmpleado = $request->input('idEmpleado');
+
+    $baja = DB::table('rh_empleado_baja')
+      ->where('idEmpleado', $idEmpleado)
+      ->where('idBaja', $idBaja)
+      ->get();
+
+    return response()->json([
+      'success' => true,
+      'data' => $baja,
+    ]);
+  }
+
+  public function getDismissRequest(Request $request)
+  {
+    $strBusca = "";
+    $draw = !empty($request->input('draw')) ? $request->input('draw') : 1;
+    $start = !empty($request->input('start')) ? $request->input('start') : 0;
+    $length = !empty($request->input('length')) ? $request->input('length') : 10;
+    $queryarr = !empty($request->input('search')) ? $request->input('search') : array();
+    $query = !empty($queryarr["value"]) ? $queryarr["value"] : "";
+    $allitems = null;
+
+    if (!empty($request->input('columns'))) {
+      $cols = $request->input('columns');
+      $busca = array();
+      foreach ($cols as $col) {
+        if (!empty($col["search"]["value"])) {
+          switch ($col["data"]) {
+            case "puesto":
+              $busca[] = " rh_p.nombre LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+            case "sucursal":
+              $busca[] = " rh_o.nombre LIKE '%" . $col["search"]["value"] . "%' ";
+              break;
+          }
+        }
+      }
+      if (!empty($busca)) {
+        $strBusca = " AND " . implode(" AND ", $busca);
+      }
+    }
+
+    $orden = " datos.fechaCrea DESC ";
+    if (!empty($request->input('order'))) {
+      $ordena = $request->input('order');
+      $orden = "";
+      switch ($ordena[0]["column"]) {
+        case 0:
+          $orden = " datos.sucursal " . $ordena[0]["dir"];
+          break;
+        case 1:
+          $orden = " datos.puesto  " . $ordena[0]["dir"];
+          break;
+        case 2:
+          $orden = " datos.nombre  " . $ordena[0]["dir"];
+          break;
+      }
+    }
+
+    //TODO: Checar que pasa cuando no existe tiempo de contratacion para algun puesto, podemos poner default 8 dias  atodos los peustos nuevos
+    //$allitems = DB::select("SELECT * FROM ( SELECT rh_vsp.idSolicitud, rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso  , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, rh_rec.nombre AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN rh_oficinas AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN rh_reclutador_sucursal rh_recsuc ON rh_recsuc.idSucursal = rh_vsp.idSucursal LEFT JOIN rh_reclutador rh_rec ON rh_rec.idReclutador = rh_recsuc.idReclutador WHERE ".$strBusca.") AS datos;");
+    $allitems = DB::select("SELECT * FROM ( SELECT rh_e.idEmpleado, rh_e.nombre, rh_o.nombre sucursal, rh_p.nombre puesto FROM rh_empleado rh_e LEFT JOIN sucursales rh_o ON rh_e.idSucursal = rh_o.id LEFT JOIN rh_puesto rh_p ON rh_e.idPuesto = rh_p.idPuesto WHERE (rh_e.estado = 2 OR rh_e.estado = 6) " . $strBusca . " ) AS datos;");
+    //$items =    DB::select("SELECT * FROM ( SELECT rh_vsp.idSolicitud, IF(rh_vsp.solicitud =1,'Cubrir Vacante','Reemplazo') AS solicitud , rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, estado.estado, rh_rec.nombre AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN rh_oficinas AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado  LEFT JOIN rh_reclutador_sucursal rh_recsuc ON rh_recsuc.idSucursal = rh_vsp.idSucursal INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN rh_reclutador rh_rec ON rh_rec.idReclutador = rh_recsuc.idReclutador WHERE ". (empty($strStatus)?"NOT(rh_vsp.estado IN(4,5,6) )": " rh_vsp.estado = ".$strStatus)." ".($RHRole != 1 ?" AND rh_vsp.idSucursal ".$strValSucursales:"")." ".$strBusca.") AS datos ".(empty($strAtraso)?"":" WHERE $strAtraso")."  ORDER BY $orden LIMIT ".$start.", ".$length.";");
+    //$items = DB::select("SELECT * FROM ( SELECT rh_vsp.idSolicitud, IF(rh_vsp.solicitud =1,'Cubrir Vacante','Reemplazo') AS solicitud , rh_vs.fechaCrea , ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ) limite, rh_vsp.lastUpdateDate ,IF(NOW() > ADDDATE(rh_vs.fechaCrea, INTERVAL tiempo.tiempo+1 DAY ),1,0) AS atraso , rh_o.nombre AS sucursal, rh_p.nombre AS puesto, rh_vs.comentario, estado.estado, rh_rec.name AS reclutador FROM rh_vacante_solicitud_partida AS rh_vsp INNER JOIN rh_vacante_solicitud AS rh_vs ON rh_vsp.idSolicitud = rh_vs.idSolicitud INNER JOIN rh_puesto AS rh_p ON rh_p.idPuesto = rh_vsp.idPuesto INNER JOIN rh_oficinas AS rh_o ON rh_o.id = rh_vsp.idSucursal INNER JOIN rh_vacante_estado estado ON estado.idEstado = rh_vsp.estado   	 	LEFT JOIN rh_sucursal_usuario rh_recsuc ON rh_vsp.idSucursal = rh_recsuc.idSucursal INNER JOIN config_app_access ON (rh_recsuc.idUsuario = config_app_access.idUsuario AND config_app_access.idRole = 2  AND config_app_access.idAplicacion = 3) INNER JOIN rh_tiempo_contrata tiempo ON tiempo.idPuesto = rh_vsp.idPuesto LEFT JOIN users rh_rec ON rh_rec.id = rh_recsuc.idUsuario WHERE ". (empty($strStatus)?"NOT(rh_vsp.estado IN(4,5,6) )": " rh_vsp.estado = ".$strStatus)." ".($RHRole != 1 ?" AND rh_vsp.idSucursal ".$strValSucursales:"")." ".$strBusca.") AS datos ".(empty($strAtraso)?"":" WHERE $strAtraso")."  ORDER BY $orden LIMIT ".$start.", ".$length.";");
+    $items = DB::select("SELECT * FROM ( SELECT rh_e.idEmpleado, CONCAT(rh_e.nombre, ' ',rh_e.apellido_pat, ' ',rh_e.apellido_mat) as nombre, rh_o.nombre sucursal, rh_p.nombre puesto, rh_e.fechaSolBaja fechaSolBaja, rh_e.fechaBaja fechaBaja, rh_e.estado,  rh_b.idBaja,rh_b.boletinado, rh_b.recontratable FROM rh_empleado rh_e LEFT JOIN sucursales rh_o ON rh_e.idSucursal = rh_o.id LEFT JOIN rh_puesto rh_p ON rh_e.idPuesto = rh_p.idPuesto INNER JOIN rh_empleado_baja rh_b ON rh_b.idEmpleado = rh_e.idEmpleado WHERE (rh_e.estado = 2 OR rh_e.estado = 6) " . $strBusca . " ) AS datos ORDER BY $orden LIMIT " . $start . ", " . $length . ";");
+    return  response()->json([
+      'draw' => $draw,
+      'recordsTotal' => count($allitems),
+      'recordsFiltered' => count($allitems),
+      'data' => $items
+    ]);
+  }
+
+  public function showEmployees()
+  {
+    $user = Auth::user();
+    //$idEmpresa = $user->idEmpresa;
+    $idEmpresa = 1;
+    $sql = "SELECT * FROM sucursales WHERE idEmpresa = ?";
+    $sucursales = DB::select($sql, [$idEmpresa]);
+
+    $sql = "SELECT * FROM rh_baja_tipo";
+    $tiposBaja = DB::select($sql);
+    return view('vacantes.empleados', ['role' => session('RHRole'), 'sucursales' => $sucursales, 'tipoBaja' => $tiposBaja]);
+  }
+
+  public function formNewEmployee($id = 0)
+  {
+    $user = Auth::user();
+    //$idEmpresa = $user->idEmpresa;
+    $idEmpresa = 1;
+    $sql = "SELECT id as idSucursal, nombre FROM sucursales WHERE idEmpresa = ?";
+    $sucursales = DB::select($sql, [$idEmpresa]);
+
+    $infoEmp = DB::table('rh_empleado as A')
+      ->select('A.*', 'B.nombre as sucursal', 'C.nombre as puesto')
+      ->leftJoin('sucursales as B', 'A.idSucursal', 'B.id')
+      ->leftJoin('rh_puesto as C', 'A.idPuesto', 'C.idPuesto')
+      ->where('idEmpleado', $id)
+      ->get();
+    $puestos = DB::table('rh_puesto')
+      ->where('estado', 1)
+      ->get();
+    $deptos = DB::table('rh_departamento')
+      ->where('estado', 1)
+      ->get();
+    $sexos = DB::table('rh_sexo')
+      ->where('estado', 1)
+      ->get();
+    $medios = DB::table('rh_medios_pago')
+      ->where('estado', 1)
+      ->get();
+    $estudios = DB::table('rh_nivel_estudios')
+      ->where('estado', 1)
+      ->get();
+    $edoCivil = DB::table('rh_edocivil')
+      ->where('estado', 1)
+      ->get();
+    $sociedad = DB::table('rh_sociedad')
+      ->where('estado', 1)
+      ->get();
+
+    return view('vacantes.formNewEmpleado', ['role' => session('RHRole'), 'sucursales' => $sucursales, 'infoEmp' => $infoEmp, 'puestos' => $puestos, 'deptos' => $deptos, 'sexos' => $sexos, 'medios' => $medios, 'estudios' => $estudios, 'edoCivil' => $edoCivil, 'sociedad' => $sociedad]);
+  }
+
+  public function uploadXlsxScreen()
+  {
+    //return view('vacantes.altasXlsx', ['role' => session('RHRole'),]);
+    return view('vacantes.altasXlsx', ['role' => 1,]);
+  }
+
+  public function registrarEmpleado(Request $request)
+  {
+    $razSocial = $request->input('razSocial');
+    $numColaborador = $request->input('numColaborador');
+    $sexo = $request->input('sexo');
+    $edoCivil = $request->input('edoCivil');
+    $estudios = $request->input('estudios');
+    $depto = $request->input('departamento');
+    $credInfo = $request->input('credInfo');
+    $formPago = $request->input('formPago');
+    $numTarjeta = $request->input('numTarjeta');
+    $nombre = $request->input('nombre');
+    $apellidoPat = $request->input('apellidoPat');
+    $apellidoMat = $request->input('apellidoMat');
+    $fechaNacimiento = $request->input('fechaNacimiento');
+    $fechaIngreso = $request->input('fechaIngreso');
+    $sucursal = $request->input('sucursal');
+    $idPuesto = $request->input('puesto');
+    $nss = $request->input('nss');
+    $rfc = $request->input('rfc');
+    $curp = $request->input('curp');
+    $telFijo = $request->input('telFijo');
+    $celular = $request->input('celular');
+    $calle = $request->input('calle');
+    $numExt = $request->input('numExt');
+    $numInt = $request->input('numInt');
+    $colonia = $request->input('colonia');
+    $munOAlc = $request->input('munOAlc');
+    $cp = $request->input('cp');
+    $estadoDir = $request->input('estado');
+    $correo = $request->input('correo');
+    $idEmpleado = $request->input('idEmpleado');
+    $salario100 = $request->input('salario100');
+    $salario90 = $request->input('salario90');
+    $salario10 = $request->input('salario10');
+    $user = Auth::user();
+    $idUsuario = $user->id;
+    $array = $request->all();
+
+
+    if (!empty($nombre) && !empty($sucursal) && !empty($idPuesto)) {
+
+      if (!empty($idEmpleado)) {
+        $infoEmp = DB::table('rh_empleado')
+          ->select('idEmpleado', 'nombre', 'apellido_pat as apellidoPat', 'apellido_mat as apellidoMat', 'fechaNacimiento', 'fechaIngreso', 'idSucursal as sucursal', 'idPuesto as puesto', 'correo', 'nss',  'rfc',  'curp',  'telFijo',  'celular',  'calle',  'numExt',  'numInt',  'colonia',  'munOAlc',  'cp',  'estadoDir as estado',  'salario100',  'salario90',  'salario10', 'idDepartamento as departamento', 'idSociedad as razSocial', 'sexo', 'edoCivil', 'estudios', 'credInfo', 'formPago', 'numTarjeta', 'numColaborador')
+          ->where('idEmpleado', $idEmpleado)
+          ->get();
+      }
+
+      if (!empty($salario10) && !empty($salario90) && empty($salario100)) {
+        $salario100 = $salario10 + $salario90;
+      }
+
+      $sql = "SELECT * FROM rh_puesto WHERE idPuesto = ?";
+      $puesto = DB::select($sql, [$idPuesto]);
+
+      $sql = "INSERT INTO rh_empleado (idEmpleado, idSucursal, idPuesto, puesto, nombreCompleto,nombre, apellido_pat, apellido_mat,fechaNacimiento, fechaIngreso, idUsuario, fechaCrea, horaCrea, nss, rfc, curp, calle, numExt, numInt, colonia, munOAlc, cp, estadoDir, telFijo, celular, correo, salario100, salario90, salario10, idDepartamento, idSociedad, sexo, edoCivil, estudios, credInfo, formPago, numTarjeta, numColaborador) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE idSucursal = ?, idPuesto = ?, puesto = ?, nombre = ?, apellido_pat = ?, apellido_mat = ?,fechaNacimiento = ?, fechaIngreso = ?, nss = ?, rfc = ?, curp = ?, calle = ?, numExt = ?, numInt = ?, colonia = ?, munOAlc = ?, cp = ?, estadoDir = ?, telFijo = ?, celular = ?, correo = ?, salario100 = ?, salario90 = ?, salario10 = ?, idDepartamento = ?, idSociedad = ?, sexo = ?, edoCivil = ?, estudios = ?, credInfo = ?, formPago = ?, numTarjeta = ?, numColaborador = ?";
+      $insert = DB::insert($sql, [$idEmpleado, $sucursal, $idPuesto, $puesto[0]->nombre, '', $nombre, $apellidoPat, $apellidoMat, $fechaNacimiento, $fechaIngreso, $idUsuario, date('Y-m-d'), date('H:i:s'), $nss, $rfc, $curp, $calle, $numExt, $numInt, $colonia, $munOAlc, $cp, $estadoDir, $telFijo, $celular, $correo, $salario100, $salario90, $salario10, $depto, $razSocial, $sexo, $edoCivil, $estudios, $credInfo, $formPago, $numTarjeta, $numColaborador, $sucursal, $idPuesto, $puesto[0]->nombre, $nombre, $apellidoPat, $apellidoMat, $fechaNacimiento, $fechaIngreso, $nss, $rfc, $curp, $calle, $numExt, $numInt, $colonia, $munOAlc, $cp, $estadoDir, $telFijo, $celular, $correo, $salario100, $salario90, $salario10, $depto, $razSocial, $sexo, $edoCivil, $estudios, $credInfo, $formPago, $numTarjeta, $numColaborador]);
+      $lid = DB::getPdo()->lastInsertId();
+
+
+      if ($insert && !empty($idEmpleado)) {
+        $keys = array_keys($array);
+        array_shift($keys);
+        $sql = [];
+        $vacAccion = '';
+
+        foreach ($keys as $key => $value) {
+          $vacAccion = '';
+          if ($infoEmp[0]->$value != $array[$value]) {
+            if ($value == 'calle'  || $value == 'numExt'  || $value == 'numInt'  || $value == 'colonia'  || $value == 'munOAlc'  || $value == 'cp'  || $value == 'estado') {
+              $vacAccion = 8;
+              if ($value == 'munOAlc') {
+                $valorAnterior = "Municipio o Alcaldia: {$infoEmp[0]->$value}";
+              } else {
+                $valorAnterior = "$value: {$infoEmp[0]->$value}";
+              }
+            } else if ($value == 'curp' || $value == 'nss' || $value == 'rfc') {
+              $vacAccion = 9;
+              $valorAnterior = "$value: {$infoEmp[0]->$value}";
+            } else if ($value == 'correo' || $value == 'telFijo' || $value == 'celular') {
+              $vacAccion = 10;
+              $valorAnterior = "$value: {$infoEmp[0]->$value}";
+            } else if ($value == 'fechaNacimiento') {
+              $vacAccion = 5;
+              $valorAnterior = "{$infoEmp[0]->$value}";
+            } else if ($value == 'fechaIngreso') {
+              $vacAccion = 6;
+              $valorAnterior = "{$infoEmp[0]->$value}";
+            } else if ($value == 'nombre' || $value == 'apellidoPat' || $value == 'apellidoMat') {
+              $vacAccion = 1;
+              $valorAnterior = "$value: {$infoEmp[0]->$value}";
+            } else if ($value == 'salario100') {
+              $vacAccion = 11;
+              $valorAnterior = "{$infoEmp[0]->$value}";
+            } else if ($value == 'salario90') {
+              $vacAccion = 12;
+              $valorAnterior = "{$infoEmp[0]->$value}";
+            } else if ($value == 'salario10') {
+              $vacAccion = 13;
+              $valorAnterior = "{$infoEmp[0]->$value}";
+            }
+
+            if ($vacAccion != '') {
+              array_push($sql, [
+                'idUsuario' => $idUsuario,
+                'idEmpleado' => $idEmpleado,
+                'idAccion' => $vacAccion,
+                'fechaCrea' => date('Y-m-d'),
+                'horaCrea' => date('H:i:s'),
+                'valorAnterior' => $valorAnterior,
+              ]);
+            }
+          }
+        }
+
+        DB::table('rh_vacante_log')
+          ->insert($sql);
+      }
+
+      if ($insert && $lid != 0 && empty($idEmpleado)) {
+        DB::table('rh_vacante_log')
+          ->insert([
+            'idUsuario' => $idUsuario,
+            'idEmpleado' => $lid,
+            'idAccion' => 7,
+            'fechaCrea' => date('Y-m-d'),
+            'horaCrea' => date('H:m:s'),
+            'valorAnterior' => 'N / R',
+          ]);
+      }
+
+      if ($insert) {
+        return response()->json([
+          'success' => true,
+          'msg' => 'El empleado se registro correctamente!'
+        ]);
+      } else {
+        return response()->json([
+          'success' => false,
+          'msg' => ''
+        ]);
+      }
+    } else {
+      return response()->json([
+        'success' => false,
+        'msg' => 'Faltan datos'
+      ]);
+    }
+  }
+
+  public function employeeDetail($id)
+  {
+
+    $datos = $this->getEmployeeDetail($id);
+    $empleado = $datos->empleado;
+    $partidas = $datos->partidas;
+    $sucursales = $datos->sucursales;
+    $puestos = $datos->puestos;
+
+    $sql = "SELECT * FROM rh_vacante_tipo WHERE estatus = 1";
+    $tiposVac = DB::select($sql);
+    /*if(empty($empleado[0]))
+		dd($id);*/
+    return view('vacantes.empleado', ['empleado' => $empleado[0], 'partidas' => $partidas, 'role' => session('RHRole'), 'sucursales' => $sucursales, 'puestos' => $puestos, 'tiposVac' => $tiposVac]);
+  }
 
 }

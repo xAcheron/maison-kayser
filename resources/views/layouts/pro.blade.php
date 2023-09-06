@@ -191,8 +191,8 @@
                 <div class="container-fluid">
                     <nav class="pull-left">
                         <ul>
-                            <li> <a href="#">Eric Kayser </a> </li>
-                            <li> <a href="#">Carmela & Sal</a> </li>
+                            <li> <a href="https://www.maison-kayser.com.mx/erickayser.html" target="_blank">Eric Kayser </a> </li>
+                            <li> <a href="https://www.carmelaysal.mx/" target="_blank">Carmela & Sal</a> </li>
                         </ul>
                     </nav>
                     <p class="copyright pull-right">

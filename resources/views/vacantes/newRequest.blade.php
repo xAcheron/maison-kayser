@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.pro')
 @include('menu.vacantes', ['seccion' => 'nuevavacante'])
 @section('content')
     <div class="row">
@@ -194,7 +194,7 @@
         aria-hidden="true">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
-                <form method="post" action="{{ route('upPedido') }}" class="form-horizontal"
+                <form method="post" action="{{-- route('upPedido') --}}" class="form-horizontal"
                     enctype="multipart/form-data">
                     <div class="modal-header">
                         <h5 class="modal-title" id="exampleModalLongTitle">Carga de archivo Excel</h5>
@@ -260,7 +260,7 @@
         //     $("#empleado").selectpicker('refresh');
         //     $.ajax({
         //         type: "POST",
-        //         url: "{{ route('getdeptos') }}",
+        //        >>aqui iria la linea 1 del txt que esta aqui llamado "cosas eliminadas por que no corria"
         //         data: {
         //             "id": $("#idSucursal").val(),
         //             "_token": "{{ csrf_token() }}"

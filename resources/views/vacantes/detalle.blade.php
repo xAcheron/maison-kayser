@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.pro')
 @include('menu.vacantes', ['seccion' => 'consultavacantes'])
 @section('content')
 <div class="row">

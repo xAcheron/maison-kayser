@@ -1,0 +1,2 @@
+ url: "{{ route('getdeptos') }}", (linea 263)
+  (linea 314)
