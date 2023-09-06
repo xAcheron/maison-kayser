@@ -11,7 +11,7 @@
                     <h5 class="card-title">Plantilla Autorizada</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('plantilla') --}}">500{{-- $autorizados --}}</a></h3>
+                    <h3><a href="{{-- route('plantilla') --}}">{{ $autorizados }}</a></h3>
                 </div>
             </div>
         </div>
@@ -21,10 +21,10 @@
                     <div class="card-icon">
                         <i class="material-icons">assignment_late</i>
                     </div>
-                    <h5 class="card-title">Vacantes #</h5>
+                    <h5 class="card-title">Vacantes</h5>
                 </div>
                 <div class="card-body">
-                    <h3>200{{-- $diferencia --}}</h3>
+                    <h3>{{ $diferencia }}</h3>
                 </div>
             </div>
         </div>
@@ -37,7 +37,7 @@
                     <h5 class="card-title">Plantilla Actual</h5>
                 </div>
                 <div class="card-body">
-                    <h3>150{{-- $actuales --}}</h3>
+                    <h3>150{{ $actuales }}</h3>
                 </div>
             </div>
         </div>
@@ -50,7 +50,7 @@
                     <h5 class="card-title">Solicitudes abiertas</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('consultavacantes') --}}">600{{-- $abiertas --}}</a></h3>
+                    <h3><a href="{{-- route('consultavacantes') --}}">{{ $abiertas }}</a></h3>
                 </div>
             </div>
         </div>
@@ -63,7 +63,7 @@
                     <h5 class="card-title">Solicitudes retrasadas</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('showRetrasadas') --}}">700{{-- $retrasadas --}}</a></h3>
+                    <h3><a href="{{-- route('showRetrasadas') --}}">{{ $retrasadas }}</a></h3>
                 </div>
             </div>
         </div>
@@ -76,7 +76,7 @@
                     <h5 class="card-title">Solicitudes en tiempo</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{-- route('showEnTiempo') --}}">120{{-- $entiempo --}}</a></h3>
+                    <h3><a href="{{-- route('showEnTiempo') --}}">120{{ $entiempo }}</a></h3>
                 </div>
             </div>
         </div>
@@ -89,7 +89,7 @@
                     <h5 class="card-title">Contrataciones del mes</h5>
                 </div>
                 <div class="card-body">
-                    <h3>2{{-- $cerradas --}}</h3>
+                    <h3>{{ $cerradas }}</h3>
                 </div>
             </div>
         </div>
@@ -103,11 +103,11 @@
                         <h5 class="card-title">Efectividad al dia</h5>
                     </div>
                     <div class="card-body">
-                        {{-- @if (count($efectividad) == 0)
+                         @if (count($efectividad) == 0)
                             <h3>0%</h3>
                         @else
                             <h3>{{ $efectividad[0]->perbien }} %</h3>
-                        @endif --}}
+                        @endif 
                     </div>
                 </div>
             </div>
@@ -120,11 +120,11 @@
                         <h5 class="card-title">Atraso al dia</h5>
                     </div>
                     <div class="card-body">
-                        {{-- @if (count($efectividad) == 0)
+                         @if (count($efectividad) == 0)
                             <h3>0%</h3>
                         @else
                             <h3>{{ $efectividad[0]->peratraso }} %</h3>
-                        @endif --}}
+                        @endif 
                     </div>
                 </div>
             </div>
@@ -152,7 +152,7 @@
                                 </tr>
                                 </head>
                             <tbody>
-                                {{-- @foreach ($efectividadReclutador as $dato)
+                                 @foreach ($efectividadReclutador as $dato)
                                     <tr>
                                         <td>{{ $dato->nombre }}</td>
                                         <td class="text-right">{{ $dato->perbien }} %</td>
@@ -164,7 +164,7 @@
                                         <td class="text-right">{{ $dato->atrasoActual }}</td>
                                         <td class="text-right">{{ $dato->anterior }}</td>
                                     </tr>
-                                @endforeach --}}
+                                @endforeach 
                             </tbody>
                         </table>
                     </div>
