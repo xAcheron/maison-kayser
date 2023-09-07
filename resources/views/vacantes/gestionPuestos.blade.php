@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.pro')
 @include('menu.vacantes', ['seccion' => 'gestionPuestos'])
 @section('content')
     <div class="w-50" style="margin: 0 auto">

@@ -1501,4 +1501,276 @@ class RHVacanteController extends Controller
     return view('vacantes.empleado', ['empleado' => $empleado[0], 'partidas' => $partidas, 'role' => session('RHRole'), 'sucursales' => $sucursales, 'puestos' => $puestos, 'tiposVac' => $tiposVac]);
   }
 
+  public function gestionPuestos(Request $request)
+  {
+    $sql = "SELECT * FROM rh_puesto";
+    $puestos = DB::select($sql);
+    return view('vacantes.gestionPuestos', ['role' => session('RHRole'), 'puestos' => $puestos]);
+  }
+
+  public function agregarPuesto(Request $request)
+  {
+    $nombre = $request->input('nombre');
+
+    if (!empty($nombre)) {
+      $sql = "INSERT INTO rh_puesto (nombre, orden, estado) VALUES (?, 1, 1)";
+      $insert = DB::insert($sql, [$nombre]);
+
+      $lid = DB::getPdo()->lastInsertId();
+      if ($insert) {
+        return response()->json([
+          "success" => true,
+          "msg" => "El puesto se creo con exito!",
+          "id" => $lid
+        ]);
+      } else {
+        return response()->json([
+          "success" => false,
+          "msg" => "Ocurrio un error al crear"
+        ]);
+      }
+    } else {
+      return response()->json([
+        "success" => false,
+        "msg" => "Faltan datos"
+      ]);
+    }
+  }
+
+  public function editarPuesto(Request $request)
+  {
+    $idPuesto = $request->input('idPuesto');
+    $nombre = $request->input('nombre');
+
+    if (!empty($idPuesto)) {
+      $sql = "UPDATE rh_puesto SET nombre = ? WHERE idPuesto = ?";
+      $update = DB::update($sql, [$nombre, $idPuesto]);
+
+      if ($update) {
+        return response()->json([
+          "success" => true,
+          "msg" => "El puesto se actualizo con exito!"
+        ]);
+      } else {
+        return response()->json([
+          "success" => false,
+          "msg" => "Ocurrio un error al actualizar"
+        ]);
+      }
+    } else {
+      return response()->json([
+        "success" => false,
+        "msg" => "Faltan datos"
+      ]);
+    }
+  }
+
+  public function eliminarPuesto(Request $request)
+  {
+    $idPuesto = $request->input('idPuesto');
+
+    if (!empty($idPuesto)) {
+
+      $sql = "SELECT * FROM rh_empleado WHERE idPuesto = ?";
+      $select = DB::select($sql, [$idPuesto]);
+
+      if (empty($select)) {
+
+        $sql = "DELETE FROM rh_puesto WHERE idPuesto = ?";
+        $delete = DB::delete($sql, [$idPuesto]);
+
+        if ($delete) {
+          return response()->json([
+            "success" => true,
+            "msg" => "Se ha eliminado exitosamente!"
+          ]);
+        } else {
+          return response()->json([
+            "success" => false,
+            "msg" => "Ocurrio un problema al eliminar"
+          ]);
+        }
+      } else {
+        return response()->json([
+          "success" => false,
+          "msg" => "No se puede eliminar",
+          "msg2" => "Debes eliminar o desasignar los empleados de este puesto antes de eliminar"
+        ]);
+      }
+    } else {
+      return response()->json([
+        "success" => false,
+        "msg" => "Faltan datos"
+      ]);
+    }
+  }
+
+  public function micros(Request $request)
+  {
+    $sucu = session('sucursales') ?? 0;
+    $sql = "SELECT idEmpleado as id, nombre FROM rh_empleado WHERE estado = 1";
+    $empleados = DB::select($sql);
+    $sql = "SELECT A.idprofile AS id,CONCAT(A.firstName, ' ',A.lastName) AS nombre, A.checkName, B.nombre AS sucursal, A.HireDate, A.DateofBirth FROM rh_micros_profile A INNER JOIN sucursales B ON A.locationRef = B.idSap WHERE micros_id is null";
+    $perfiles = DB::select($sql);
+    $sql = "SELECT * FROM rh_puesto WHERE estado = 1";
+    $puestos = DB::select($sql);
+    $sql = "SELECT id, nombre, idSap FROM sucursales WHERE estado = 1 AND id IN ($sucu)";
+    $sucursales = DB::select($sql, []);
+    return view('vacantes.micros', ['role' => session('RHRole'), 'empleados' => $empleados, 'perfiles' => $perfiles, 'puestos' => $puestos, 'sucursales' => $sucursales]);
+  }
+
+  public function getPerfilesMicros(Request $request)
+  {
+    $sucursales = session('sucursales') ? "WHERE id IN (" . session('sucursales') . ")" : '';
+
+    $sucursales = DB::select("SELECT idSap as `sucursales` FROM sucursales $sucursales", []);
+    $sucu = "";
+    foreach ($sucursales as $key => $value) {
+      if (!empty($sucu))
+        $sucu .= ",";
+      $sucu .= "'{$value->sucursales}'";
+    }
+
+    $nacimientoIni = substr($request->input('nacimiento') ?? date('0000-00-00'), 0, 10);
+    $nacimientoFin = !empty($request->input('nacimiento')) ? substr($request->input('nacimiento'), 13, 22) : date('Y-m-d');
+    $contratacionIni = substr($request->input('contratacion') ?? date('0000-00-00'), 0, 10);
+    $contratacionFin = !empty($request->input('contratacion')) ? substr($request->input('contratacion'), 13, 22) : date('Y-m-d');
+    $sucursal = !empty($request->input('sucursal')) ? "'{$request->input('sucursal')}'" : $sucu;
+    $nombre = "%{$request->input('nombre')}%" ?? '%%';
+    $limit = $request->input('limit') ?? 20;
+    $offset = $request->input('offset') ?? 0;
+
+
+
+    $sql = "SELECT A.idprofile AS id,CONCAT(A.firstName, ' ',A.lastName) AS nombre, A.checkName, B.nombre AS sucursal, A.HireDate, A.DateofBirth FROM rh_micros_profile A INNER JOIN sucursales B ON A.locationRef = B.idSap WHERE micros_id is NULL AND A.DateofBirth BETWEEN ? AND ? AND A.HireDate BETWEEN ? AND ? AND A.locationRef IN ($sucursal) AND CONCAT(A.firstName, ' ',A.lastName) LIKE ? LIMIT ? OFFSET ?";
+    $perfiles = DB::select($sql, [$nacimientoIni, $nacimientoFin, $contratacionIni, $contratacionFin, $nombre, $limit, $offset]);
+
+
+    $sql = "SELECT COUNT(A.idprofile)as registros FROM rh_micros_profile A INNER JOIN sucursales B ON A.locationRef = B.idSap WHERE micros_id is NULL AND A.DateofBirth BETWEEN ? AND ? AND A.HireDate BETWEEN ? AND ? AND A.locationRef IN ($sucursal) AND CONCAT(A.firstName, ' ',A.lastName) LIKE ?";
+    $perfilesCount = DB::select($sql, [$nacimientoIni, $nacimientoFin, $contratacionIni, $contratacionFin, $nombre]);
+
+    $paginas = $perfilesCount[0]->registros / $limit;
+
+    $paginaActual = $offset / $limit;
+
+    return response()->json([
+      'success' => true,
+      'data' => $perfiles,
+      'paginas' => ceil($paginas),
+      'paginaActual' => $paginaActual,
+    ]);
+  }
+
+  public function getEmpleadosMicros(Request $request)
+  {
+    $nombre = "%{$request->input('nombre')}%" ?? '%%';
+    $limit = $request->input('limit') ?? 20;
+    $offset = $request->input('offset') ?? 0;
+    $sucursales = session('sucursales') ? "AND WHERE idSucursal IN (" . session('sucursales') . ")" : '';
+    // $sucursales = session('sucursales') ?? 0;
+
+    $sql = "SELECT idEmpleado as id, CONCAT(nombre, ' ',apellido_pat, ' ',apellido_mat) as nombre FROM rh_empleado WHERE estado = 1 AND nombreCompleto LIKE ? $sucursales LIMIT ? OFFSET ?";
+    $empleados = DB::select($sql, [$nombre, $limit, $offset]);
+
+    $sql = "SELECT COUNT(idEmpleado) as registros FROM rh_empleado WHERE estado = 1 AND nombre LIKE ? $sucursales";
+    $empleadosCount = DB::select($sql, [$nombre]);
+
+    $paginas = $empleadosCount[0]->registros / $limit;
+
+    $paginaActual = $offset / $limit;
+
+    return response()->json([
+      'success' => true,
+      'data' => $empleados,
+      'paginas' => ceil($paginas),
+      'paginaActual' => $paginaActual,
+    ]);
+  }
+
+  public function crearEmpleadoPerf(Request $request)
+  {
+    $idPerfiles = $request->input('idPerfiles');
+    $nombre = $request->input('nombre');
+    $puesto = $request->input('puesto');
+    $idSucursal = $request->input('sucursal');
+
+    if (!empty($idPerfiles) && !empty($puesto) && !empty($nombre) && !empty($idSucursal)) {
+
+      $idPerfilesString = implode(",", $idPerfiles);
+
+      $sql = "SELECT * FROM rh_puesto WHERE idPuesto = ?";
+      $puesto = DB::select($sql, [$puesto]);
+
+      $sql = "SELECT HireDate, DateofBirth FROM rh_micros_profile A WHERE idProfile IN ($idPerfilesString) ORDER BY HireDate LIMIT 1";
+      $perfiles = DB::select($sql);
+
+      $sql = "INSERT INTO rh_empleado (nombre, fechaNacimiento, fechaIngreso,fechaCrea, horaCrea, puesto, idPuesto, idSucursal) VALUE (?,?,?,?,?,?,?,?)";
+      $insert = DB::insert($sql, [$nombre, $perfiles[0]->DateofBirth, $perfiles[0]->HireDate, date('Y-m-d'), date('H:m:s'), $puesto[0]->nombre, $puesto[0]->idPuesto, $idSucursal]);
+
+      $lid = DB::getPdo()->lastInsertId();
+
+      $sql = "UPDATE rh_micros_profile SET micros_id = ? WHERE idProfile = ?";
+
+      foreach ($idPerfiles as $key => $value) {
+        DB::update($sql, ["$lid-$key", $value]);
+      }
+
+      if ($insert) {
+        return response()->json([
+          "success" => true,
+          "msg" => "El empleado se creo exitosamente!",
+          "empleado" => (object)[
+            "id" => $lid,
+            "nombre" => $nombre,
+          ]
+        ]);
+      } else {
+        return response()->json([
+          "success" => false,
+          "msg" => "Ocurrio un error"
+        ]);
+      }
+    } else {
+      return response()->json([
+        "success" => false,
+        "msg" => "Debe seleccionar por lo menos 1 perfil"
+      ]);
+    }
+  }
+
+  public function agruparPerfilesEmp(Request $request)
+  {
+    $idEmpleado = $request->input('idEmpleado');
+    $idPerfiles = $request->input('idPerfiles');
+
+    if (!empty($idEmpleado) && !empty($idPerfiles)) {
+
+      $key = 0;
+      $sql = "SELECT micros_id  FROM rh_micros_profile WHERE micros_id LIKE ? ORDER BY micros_id DESC LIMIT 1";
+      $perfiles = DB::select($sql, ["$idEmpleado-%"]);
+
+      if (!empty($perfiles)) {
+        $numero = explode("-", $perfiles[0]->micros_id);
+        $key = intval($numero[1]) + 1;
+      }
+
+      $sql = "UPDATE rh_micros_profile SET micros_id = ? WHERE idProfile = ?";
+
+      foreach ($idPerfiles as $value) {
+        DB::update($sql, ["$idEmpleado-$key", $value]);
+        $key++;
+      }
+
+      return response()->json([
+        "success" => true,
+        "msg" => "Los perfiles se asignaron correctamente!"
+      ]);
+    } else {
+      return response()->json([
+        "success" => false,
+        "msg" => "Debe seleccionar 1 empleado y por lo menos 1 perfil"
+      ]);
+    }
+  }
+
 }

@@ -1,6 +1,6 @@
 @section('appmenu')
     <li class="nav-item active">
-        <a class="nav-link" href="{{-- route('vacantes') --}}" aria-expanded="true">
+        <a class="nav-link" href="{{ route('vacantes') }}" aria-expanded="true">
             <i class="material-icons">transfer_within_a_station</i>
             <p> Vacantes RH <b class="caret"></b> </p>
         </a>
@@ -8,13 +8,13 @@
             <ul class="nav">
                 {{-- @if ($role != 5) --}}
                     <li class="nav-item @if ($seccion == 'nuevavacante') active @endif ">
-                        <a class="nav-link" href="{{-- route('nuevavacante') --}}">
+                        <a class="nav-link" href="{{ route('nuevavacante') }}">
                             <i class="material-icons">book</i>
                             <p> Solicitud de Personal </p>
                         </a>
                     </li>
                     <li class="nav-item @if ($seccion == 'consultavacantes') active @endif ">
-                        <a class="nav-link" href="{{-- route('consultavacantes') --}}">
+                        <a class="nav-link" href="{{ route('consultavacantes') }}">
                             <i class="material-icons">view_list</i>
                             <p> Consulta de solicitudes </p>
                         </a>
@@ -38,32 +38,32 @@
                 {{-- @endif
                 @if ($role == 1 || $role == 5) --}}
                     <li class="nav-item @if ($seccion == 'getBajas') active @endif ">
-                        <a class="nav-link" href="{{-- route('getBajas') --}}">
+                        <a class="nav-link" href="{{ route('getBajas') }}">
                             <i class="material-icons">view_list</i>
                             <p> Bajas</p>
                         </a>
                     </li>
                     <li class="nav-item @if ($seccion == 'empleados') active @endif ">
-                        <a class="nav-link" href="{{-- route('empleados') --}}">
+                        <a class="nav-link" href="{{ route('empleados') }}">
                             <i class="material-icons">supervisor_account</i>
                             <p>Empleados</p>
                         </a>
                     </li>
                 {{-- @endif --}}
                 <li class="nav-item @if ($seccion == 'plantilla') active @endif ">
-                    <a class="nav-link" href="{{-- route('plantilla') --}}">
+                    <a class="nav-link" href="{{ route('plantilla') }}">
                         <i class="material-icons">assignment</i>
                         <p>Plantilla</p>
                     </a>
                 </li>
                 <li class="nav-item @if ($seccion == 'gestionPuestos') active @endif ">
-                    <a class="nav-link" href="{{-- route('gestionPuestos') --}}">
+                    <a class="nav-link" href="{{ route('gestionPuestos') }}">
                         <i class="material-icons">manage_accounts</i>
                         <p>Gestion Puestos</p>
                     </a>
                 </li>
                 <li class="nav-item @if ($seccion == 'micros') active @endif ">
-                    <a class="nav-link" href="{{-- route('micros') --}}">
+                    <a class="nav-link" href="{{ route('micros') }}">
                         <i class="material-icons">manage_accounts</i>
                         <p>Micros</p>
                     </a>

@@ -20,7 +20,7 @@ Route::get('/', function () {
 });
 
 Route::get('prueba', [PruebaController::class, 'index']);
-Route::get('vacante', [RHVacanteController::class, 'index']);
+Route::get('vacantes', [RHVacanteController::class, 'index'])->name('vacantes');
 Route::get('plantilla', [RHVacanteController::class, 'showGlobalHeadcount'])->name('plantilla');
 Route::get('plantilla/sucursal', [RHVacanteController::class, 'detPlantillaTable'])->name('detPlantillaTable');
 Route::get('plantilla/ver/{nombre?}/{id}', [RHVacanteController::class, 'plantillaDetail'])->name('plantillaDetail');
@@ -59,6 +59,16 @@ Route::get('empleados/crear/{id?}', [RHVacanteController::class, 'formNewEmploye
 Route::get('empleados/alta', [RHVacanteController::class, 'uploadXlsxScreen'])->name('uploadXlsx');
 Route::post('empleado/registrar', [RHVacanteController::class, 'registrarEmpleado'])->name('registrarEmpleado');
 Route::get('empleado/{id?}', [RHVacanteController::class, 'employeeDetail'])->name('detalleempleado');
+Route::get('gestion', [RHVacanteController::class, 'gestionPuestos'])->name('gestionPuestos');
+Route::post('gestion/agregar', [RHVacanteController::class, 'agregarPuesto'])->name('agregarPuesto');
+Route::post('gestion/editar', [RHVacanteController::class, 'editarPuesto'])->name('editarPuesto');
+Route::post('gestion/eliminar', [RHVacanteController::class, 'eliminarPuesto'])->name('eliminarPuesto');
+Route::get('micros', [RHVacanteController::class, 'micros'])->name('micros');
+Route::post('micros/obtener/perfiles', [RHVacanteController::class, 'getPerfilesMicros'])->name('getPerfilesMicros');
+Route::post('micros/obtener/empleados', [RHVacanteController::class, 'getEmpleadosMicros'])->name('getEmpleadosMicros');
+Route::post('micros/crear', [RHVacanteController::class, 'crearEmpleadoPerf'])->name('crearEmpleadoPerf');
+Route::post('micros/agrupar', [RHVacanteController::class, 'agruparPerfilesEmp'])->name('agruparPerfilesEmp');
+
 
 
 
