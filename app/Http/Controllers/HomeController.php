@@ -17,7 +17,7 @@ class HomeController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth');
+        //$this->middleware('auth');
     }
 
     /**
@@ -27,11 +27,12 @@ class HomeController extends Controller
      */
     public function index()
     {	
-		DB::enableQueryLog();
-		$user = Auth::user();		
-		$idUsuario = $user->id;
-		if(!empty($idUsuario))
-		{
+		// DB::enableQueryLog();
+		// $user = Auth::user();		
+		// //$idUsuario = $user->id;
+        // $idUsuario = 1;
+		// if(!empty($idUsuario))
+		// {
             $forallapps = DB::table('config_app')
             ->select('nombre', 'url', 'icono', 'externo')
             ->where('estado', '=', 2);
@@ -39,16 +40,18 @@ class HomeController extends Controller
 			$apps = DB::table('config_app_access AS cap')
 			->join('config_app AS ca','cap.idAplicacion', '=', 'ca.idAplicacion')
 			->select('ca.nombre', 'ca.url', 'ca.icono', 'ca.externo')
-            ->where('cap.idUsuario', '=', $idUsuario)
+            ->where('cap.idUsuario', '=', 1)
+            ->whereIn('cap.idAplicacion', [3,23])
             ->union($forallapps)
 			->get();
 			return view('home', ['apps' => $apps]);
-			//return "<b>".bcrypt("Prigo#18")."</b>";
-		}
-		else
-		{
-			return view('home');
-		}
+			//return "<b>".bcrypt("Prigo#18")."</b>"; 
+		// }
+		// else
+		// {
+		// 	return view('home');
+		// }
+        //return view('home');
     }
     
     public function newindex()

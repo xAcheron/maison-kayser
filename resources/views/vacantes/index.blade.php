@@ -37,7 +37,7 @@
                     <h5 class="card-title">Plantilla Actual</h5>
                 </div>
                 <div class="card-body">
-                    <h3>150{{ $actuales }}</h3>
+                    <h3>{{ $actuales }}</h3>
                 </div>
             </div>
         </div>
@@ -76,7 +76,7 @@
                     <h5 class="card-title">Solicitudes en tiempo</h5>
                 </div>
                 <div class="card-body">
-                    <h3><a href="{{ route('showEnTiempo') }}">120{{ $entiempo }}</a></h3>
+                    <h3><a href="{{ route('showEnTiempo') }}">{{ $entiempo }}</a></h3>
                 </div>
             </div>
         </div>

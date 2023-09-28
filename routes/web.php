@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PruebaController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\RHVacanteController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,15 +16,16 @@ use Illuminate\Support\Facades\Route;
 | be assigned to the "web" middleware group. Make something great!
 |
 */
-
+Route::get('home', [HomeController::class, 'index'])->name('home'); 
 Route::get('/', function () {
-    return view('home');
+    return view('login'); 
 });
 
-Route::get('home', [HomeController::class, 'index'])->name('home'); 
+
 
 
 // Todo esto tiene que ver con el controlador de RH. Recuerda moverlo de tal manera que se minimice el codigo.
+Route::get('home', [HomeController::class, 'index'])->name('home');
 Route::get('prueba', [PruebaController::class, 'index'])->name('prueba'); 
 Route::get('vacantes', [RHVacanteController::class, 'index'])->name('vacantes');
 Route::get('plantilla', [RHVacanteController::class, 'showGlobalHeadcount'])->name('plantilla');
@@ -73,6 +75,12 @@ Route::post('micros/obtener/perfiles', [RHVacanteController::class, 'getPerfiles
 Route::post('micros/obtener/empleados', [RHVacanteController::class, 'getEmpleadosMicros'])->name('getEmpleadosMicros');
 Route::post('micros/crear', [RHVacanteController::class, 'crearEmpleadoPerf'])->name('crearEmpleadoPerf');
 Route::post('micros/agrupar', [RHVacanteController::class, 'agruparPerfilesEmp'])->name('agruparPerfilesEmp');
+Route::get('reports', [ReportsController::class, 'indexVue'])->name('reportsIndex');
+
+// Los reportes uwu
+Route::get("venta/mes",[SalesController::class, 'mensual'])->name('ventaMensual');
+Route::get("venta/lastyear",[SalesController::class, 'getLastYear'])->name('getLastYear');
+Route::get("reports/Budget/",[ReportsController::class, 'BudgetReport'])->name('budgetOps');
 
 
 
