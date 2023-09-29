@@ -1,6 +1,8 @@
 @extends('layouts.vue')
 @section('aditionalScripts')
-<script type="module" crossorigin src="/assets/index.js"></script>
+{{-- <script type="module" crossorigin src="/assets/index.js"></script> --}}
+<script type="module" crossorigin src="../../delivery/assets/index.js"></script>
+
 <script>
 	const menuStruct = {!! json_encode($menu) !!}
 </script>

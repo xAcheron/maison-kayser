@@ -1,0 +1,371 @@
+<?php
+
+namespace App\Classes\Reports;
+
+use Illuminate\Support\Facades\DB;
+use App\Classes\Reports\IReporter;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+
+class MeReporter implements iReporter
+{
+
+    private $initDate;
+    private $endDate;
+    private $location;
+    private $locationID;
+    private $result;
+    private $company;
+
+    public function setParams($params)
+    {
+        $tmpDates = explode(" - ", $params["daterange"]);
+        $this->initDate = $tmpDates[0];
+        $this->endDate = $tmpDates[1];
+        if (is_numeric($params["location"])) {
+            $this->company = $params["location"];
+            $locations = $this->getLocations($params["location"]);
+            $this->location = $locations[0];
+            $this->locationID = $locations[1];
+        } else {
+            $tmpLocationInfo = $this->getLocation($params["location"]);
+            $locations = "'" . $params["location"] . "'";
+            $this->company = $tmpLocationInfo[2];
+            $this->location = $tmpLocationInfo[0];
+            $this->locationID = $tmpLocationInfo[1];
+        }
+        $this->result = null;
+    }
+
+    public function getLocation($idLocation)
+    {
+        $sql = "SELECT * FROM sucursales WHERE idMicros = ?;";
+        $locations = DB::select($sql, [$idLocation]);
+        return array("'" . $locations[0]->idMicros . "'", $locations[0]->id,  $locations[0]->idEmpresa);
+    }
+
+    public function getLocations($idEmpresa)
+    {
+        $sql = "SELECT * FROM sucursales WHERE idEmpresa = ?;";
+        $locations = DB::select($sql, [$idEmpresa]);
+        $locationArr = array();
+        $locationIDArr = array();
+
+        foreach ($locations as $location) {
+            $locationArr[] = "'" . $location->idMicros . "'";
+            $locationIDArr[] = $location->id;
+        }
+        return array(implode(",", $locationArr), implode(",", $locationIDArr));
+    }
+
+    public function runReport()
+    {
+        /*
+        $sql = "SELECT clas.idMajor, mmg.major, SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(descuento)descuento, 0 AS salesPercent, SUM(vmpm.cantidad*rp.costo) AS costo FROM venta_mes_producto_micros vmpm LEFT JOIN micros_producto_clasificacion clas ON vmpm.idMicros = clas.idMicros LEFT JOIN micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?)  LEFT JOIN recetas_platillo rp ON rp.idMicros = vmpm.idMicros WHERE clas.idMajor != 0 AND vmpm.idSucMicros IN (".$this->location.") AND vmpm.fecha BETWEEN ? AND ?  GROUP BY clas.idMajor, mmg.major ORDER BY clas.idMajor;";
+        $this->result = DB::select($sql,[$this->company, $this->initDate, $this->endDate]);
+        */
+
+        $sql = "SELECT clas.idMajor, mmg.major, SUM(costo) AS costo, SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta,SUM(ventaNetaImp) ventaNetaImp, SUM(descuento)descuento, 0 AS salesPercent  FROM 
+        (SELECT VM.idItem AS idMicros, SUM( VM.count * rp.costo) costo, SUM(VM.netSales) ventaBruta, SUM(VM.netSales) ventaNeta,SUM(VM.netSales/1.16)ventaNetaImp , 0 AS descuento
+        FROM vds_modificador VM LEFT JOIN recetas_platillo rp ON rp.idMicros = VM.itemNumber 
+        WHERE VM.idSucursal IN(" . $this->locationID . ") AND VM.fecha BETWEEN ? AND ? GROUP BY VM.idItem
+        UNION ALL
+        SELECT vmpm.idMicros, SUM(vmpm.cantidad* rp.costo) costo , SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(descuento)descuento FROM venta_mes_producto_micros vmpm
+        LEFT JOIN recetas_platillo rp ON rp.idMicros = vmpm.idMicros
+        WHERE vmpm.idSucMicros IN (" . $this->location . ") AND  vmpm.fecha BETWEEN ? AND ? GROUP BY vmpm.idMicros
+        ) AS VT
+        LEFT JOIN micros_producto_clasificacion clas ON VT.idMicros = clas.idMicros
+        LEFT JOIN micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?)  
+        GROUP BY clas.idMajor, mmg.major ORDER BY clas.idMajor;";
+
+        $sql = "SELECT
+            idMajor, major,SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta, SUM(ventaNetaImp)ventaNetaImp, SUM(descuento)descuento, SUM(cantidad) cantidad, SUM(costo) costo, SUM(SCMB) SCMB, SUM(ventaBruta) - SUM(costo) Margen, 0 salesPercent
+        FROM 
+        (
+            SELECT VTSC.idMajor,VTSC.major, SUM(VTSC.ventaBruta) ventaBruta ,  SUM(VTSC.ventaNeta) ventaNeta,  SUM(VTSC.ventaNetaImp) ventaNetaImp,  SUM(VTSC.descuento) descuento,  SUM(VTSC.cantidad) cantidad,  SUM(VTSC.cantidad- COALESCE(CM.cantidad,0)) AS SCMB,  SUM(((VTSC.cantidad- COALESCE(CM.cantidad,0)) * VTSC.costo)) AS costo FROM 
+                (SELECT vmpm.idMicros ,vmpm.idItemMicros, mmg.idMajor, mmg.major , SUM(vmpm.ventaBruta) ventaBruta, SUM(vmpm.ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(vmpm.descuento)descuento, SUM(vmpm.cantidad) cantidad, MAX(rp.costo) AS costo
+                FROM 
+                    venta_mes_producto_micros vmpm 
+                LEFT JOIN 
+                    micros_producto_clasificacion clas ON vmpm.idMicros = clas.idMicros 
+                LEFT JOIN 
+                    micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?) 
+                LEFT JOIN 
+                recetas_platillo rp ON rp.idMicros = vmpm.idMicros
+                WHERE vmpm.idSucMicros IN (" . $this->location . ") AND vmpm.fecha BETWEEN ? AND ?  GROUP BY vmpm.idMicros, vmpm.idItemMicros, mmg.idMajor, mmg.major HAVING SUM(vmpm.ventaNeta) > 0
+                ) VTSC
+                LEFT JOIN (SELECT CMB.itemNumber, SUM(CMB.count) cantidad FROM vds_combo CMB WHERE CMB.idSucursal IN (" . $this->locationID . ") AND CMB.fecha BETWEEN ? AND ?  GROUP BY CMB.itemNumber) CM ON CM.itemNumber = VTSC.idMicros
+                GROUP BY VTSC.idMajor ,VTSC.major
+            UNION ALL
+                SELECT 
+                mmg.idMajor, mmg.major, SUM(VM.netSales) ventaBruta,SUM(VM.netSales) ventaNeta, SUM(VM.netSales)ventaNetaImp, 0 descuento, 0 cantidad, 0 SCMB, SUM(VM.count * rp.costo) costo
+                FROM vds_modificador VM 
+                LEFT JOIN 
+                    micros_producto_clasificacion clas ON VM.idItem = clas.idMicros 
+                LEFT JOIN 
+                    micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?) 
+                LEFT JOIN recetas_platillo rp ON rp.idMicros = VM.itemNumber 
+                WHERE 
+                VM.idSucursal IN (" . $this->locationID . ") AND VM.fecha BETWEEN ? AND ? 
+                GROUP BY mmg.idMajor,mmg.major
+        ) AS VT GROUP BY idMajor,major ORDER BY ventaBruta DESC";
+
+        $this->result = DB::select($sql, [$this->company, $this->initDate, $this->endDate, $this->initDate, $this->endDate, $this->company, $this->initDate, $this->endDate]);
+
+
+
+        $sql = "SELECT SUM(A.count * B.costo) costo FROM vds_combo A INNER JOIN recetas_platillo B ON A.itemNumber = B.idMicros INNER JOIN sucursales S ON S.id = A.idSucursal WHERE S.id IN (" . $this->locationID . ") AND NOT(A.idCombo = A.itemNumber) AND A.fecha BETWEEN ? AND ? GROUP BY YEAR(A.fecha)";
+        $costoCombo =  DB::select($sql, [$this->initDate, $this->endDate]);
+
+        $tmpGrossTotal = 0;
+        $tmpNetTotal = 0;
+        $tmpventaNetaImp = 0;
+        $tmpCosto = 0;
+        $majors = array();
+
+        foreach ($this->result as $row) {
+
+            if ($row->idMajor == 107)
+                $row->costo = $costoCombo[0]->costo;
+
+            array_push($majors, $row->major);
+            $tmpGrossTotal += $row->ventaBruta;
+            $tmpNetTotal += $row->ventaNeta;
+            $tmpventaNetaImp += $row->ventaNetaImp;
+            $tmpCosto += $row->costo;
+        }
+
+        foreach ($this->result as $id => $row) {
+            $this->result[$id]->salesPercent = !empty($tmpGrossTotal) ? $row->ventaBruta * 100 / $tmpGrossTotal : 0;
+        }
+
+        $this->result[] = json_decode(json_encode(array("idMajor" => 0, "major" => "Total", "ventaBruta" => $tmpGrossTotal, "ventaNeta" => $tmpNetTotal, "ventaNetaImp" => $tmpventaNetaImp, "salesPercent" => 100, "costo" => $tmpCosto)));
+        $this->result = array("majors" => $majors, "report" => $this->result);
+    }
+
+    public function getResult($type)
+    {
+        if ($type == "xlsx") {
+            $this->exportReport();
+        } else {
+            $parser = new ReportParser($type);
+            return $parser->parse($this->result);
+        }
+    }
+
+    public function exportReport()
+    {
+        /*$sql = "SELECT clas.idMajor, mmg.major, SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(descuento)descuento, 0 AS salesPercent, SUM(vmpm.cantidad*rp.costo) AS costo FROM venta_mes_producto_micros vmpm LEFT JOIN micros_producto_clasificacion clas ON vmpm.idMicros = clas.idMicros LEFT JOIN micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?)  LEFT JOIN recetas_platillo rp ON rp.idMicros = vmpm.idMicros WHERE clas.idMajor != 0 AND vmpm.idSucMicros IN (".$this->location.") AND vmpm.fecha BETWEEN ? AND ?  GROUP BY clas.idMajor, mmg.major ORDER BY clas.idMajor;";
+        $tmpResult = DB::select($sql,[$this->company, $this->initDate, $this->endDate]);*/
+        /*
+        $sql = "SELECT clas.idMajor, mmg.major, SUM(costo) AS costo, SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta,SUM(ventaNetaImp) ventaNetaImp, SUM(descuento)descuento, 0 AS salesPercent  FROM 
+        (SELECT VM.idItem AS idMicros, SUM( VM.count * rp.costo) costo, SUM(VM.netSales) ventaBruta, SUM(VM.netSales) ventaNeta,SUM(VM.netSales/1.16)ventaNetaImp , 0 AS descuento
+        FROM vds_modificador VM LEFT JOIN recetas_platillo rp ON rp.idMicros = VM.itemNumber 
+        WHERE VM.idSucursal IN(".$this->locationID.") AND VM.fecha BETWEEN ? AND ? GROUP BY VM.idItem
+        UNION ALL
+        SELECT vmpm.idMicros, SUM(vmpm.cantidad* rp.costo) costo , SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(descuento)descuento FROM venta_mes_producto_micros vmpm
+        LEFT JOIN recetas_platillo rp ON rp.idMicros = vmpm.idMicros
+        WHERE vmpm.idSucMicros IN (".$this->location.") AND  vmpm.fecha BETWEEN ? AND ? GROUP BY vmpm.idMicros
+        ) AS VT
+        LEFT JOIN micros_producto_clasificacion clas ON VT.idMicros = clas.idMicros
+        LEFT JOIN micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?)  
+        GROUP BY clas.idMajor, mmg.major ORDER BY clas.idMajor;";
+        DB::select($sql,[$this->initDate, $this->endDate,$this->initDate, $this->endDate,$this->company]);
+        
+        $sql="SELECT SUM(A.count * B.costo) costo FROM vds_combo A INNER JOIN recetas_platillo B ON A.itemNumber = B.idMicros INNER JOIN sucursales S ON S.id = A.idSucursal WHERE S.id IN (".$this->locationID.") AND NOT(A.idCombo = A.itemNumber) AND A.fecha BETWEEN ? AND ? GROUP BY YEAR(A.fecha)";
+        $costoCombo =  DB::select($sql,[ $this->initDate, $this->endDate]);
+
+        $tmpGrossTotal=0;
+        $tmpNetTotal=0;
+        $tmpventaNetaImp=0;
+        $tmpCosto=0;
+        
+        foreach($tmpResult as $row){
+            if( $row->idMajor==107) 
+                $row->costo = $costoCombo[0]->costo;
+
+            $tmpGrossTotal +=$row->ventaBruta;
+            $tmpNetTotal +=$row->ventaNeta;
+            $tmpventaNetaImp += $row->ventaNetaImp;
+            $tmpCosto += $row->costo;
+        }
+
+        foreach($tmpResult as $id => $row){
+            $tmpResult[$id]->salesPercent = !empty($tmpGrossTotal)?$row->ventaBruta*100/$tmpGrossTotal:0;
+        }
+
+        $tmpResult[] = json_decode(json_encode(array("idMajor" => 0, "major" => "Total", "ventaBruta" =>$tmpGrossTotal, "ventaNeta" => $tmpNetTotal, "ventaNetaImp" =>$tmpventaNetaImp, "salesPercent" => 0, "costo" => $tmpCosto )));
+*/
+        $tmpResult = $this->result["report"];
+        $sql = "SELECT VT.* , (VT.cantidad * rp.costo) AS costo, VT.ventaBruta - (VT.cantidad * rp.costo) Margen, 0 AS salesPercent  FROM (SELECT vmpm.idMicros, mmg.major ,vmpm.idItemMicros , SUM(vmpm.ventaBruta) ventaBruta, SUM(vmpm.ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(vmpm.descuento)descuento, SUM(vmpm.cantidad) cantidad FROM venta_mes_producto_micros vmpm LEFT JOIN micros_producto_clasificacion clas ON vmpm.idMicros = clas.idMicros LEFT JOIN micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?) WHERE mmg.idMajor != 0 And NOT(mmg.idMajor = 107) AND vmpm.idSucMicros IN (" . $this->location . ")  AND vmpm.fecha BETWEEN ? AND ? GROUP BY vmpm.idMicros, vmpm.idItemMicros, mmg.major HAVING SUM(vmpm.ventaNeta) >0 ORDER BY ventaBruta DESC, cantidad DESC) AS VT LEFT JOIN recetas_platillo rp ON rp.idMicros = VT.idMicros ORDER BY VT.ventaBruta DESC;";
+
+        /*UNION ALL
+        SELECT VT.*, (VT.cantidad) AS SCMB,COALESCE(CM.costo,0) AS costo, VT.ventaBruta - COALESCE(CM.costo,0) Margen, 0 salesPercent FROM (SELECT vmpm.idMicros ,vmpm.idItemMicros , SUM(vmpm.ventaBruta) ventaBruta, SUM(vmpm.ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(vmpm.descuento)descuento, SUM(vmpm.cantidad) cantidad FROM venta_mes_producto_micros vmpm LEFT JOIN micros_producto_clasificacion clas ON vmpm.idMicros = clas.idMicros LEFT JOIN micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?) WHERE mmg.idMajor = 107 AND vmpm.idSucMicros IN (".$this->location.") AND vmpm.fecha BETWEEN ? AND ? GROUP BY vmpm.idMicros, vmpm.idItemMicros HAVING SUM(vmpm.ventaNeta) >0 ORDER BY ventaBruta DESC, cantidad DESC) AS VT 
+            LEFT JOIN (
+                SELECT A.idCombo, SUM(A.count * B.costo) costo FROM vds_combo A INNER JOIN recetas_platillo B ON A.itemNumber = B.idMicros INNER JOIN sucursales S ON S.id = A.idSucursal WHERE S.id IN (".$this->locationID.") AND NOT(A.idCombo = A.itemNumber) AND A.fecha BETWEEN ? AND ? GROUP BY A.idCombo
+            ) AS CM ON CM.idCombo = VT.idMicros LEFT JOIN recetas_platillo rp ON rp.idMicros = VT.idMicros ORDER BY ventaBruta DESC;";*/
+
+
+
+        $sql = "SELECT
+                idMicros, MAX(idItemMicros) idItemMicros, MAX(major) major , SUM(ventaBruta) ventaBruta, SUM(ventaNeta) ventaNeta, SUM(ventaNetaImp)ventaNetaImp, SUM(descuento)descuento, SUM(SCMB) cantidad , SUM(costo) costo, SUM(SCMB) SCMB , SUM(ventaBruta) - SUM(costo) Margen , 0 salesPercent
+            FROM 
+            (
+                SELECT VTSC.idMicros ,VTSC.idItemMicros, VTSC.major , VTSC.ventaBruta, VTSC.ventaNeta, VTSC.ventaNetaImp, VTSC.descuento, VTSC.cantidad,  VTSC.cantidad-COALESCE(CM.cantidad,0) AS SCMB ,(COALESCE(((VTSC.cantidad-COALESCE(CM.cantidad,0)) * VTSC.costo),0) + COALESCE(CM2.costo, 0)) AS costo FROM 
+                    (SELECT vmpm.idMicros ,vmpm.idItemMicros, mmg.major , SUM(vmpm.ventaBruta) ventaBruta, SUM(vmpm.ventaNeta) ventaNeta, SUM(vmpm.ventaNetaImp)ventaNetaImp, SUM(vmpm.descuento)descuento, SUM(vmpm.cantidad) cantidad, MAX(rp.costo) AS costo
+                    FROM 
+                        venta_mes_producto_micros vmpm 
+                    LEFT JOIN 
+                        micros_producto_clasificacion clas ON vmpm.idMicros = clas.idMicros 
+                    LEFT JOIN 
+                        micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?) 
+                    LEFT JOIN 
+                    recetas_platillo rp ON rp.idMicros = vmpm.idMicros
+                    WHERE vmpm.idSucMicros IN (" . $this->location . ") AND vmpm.fecha BETWEEN ? AND ?  GROUP BY vmpm.idMicros, vmpm.idItemMicros, mmg.major HAVING SUM(vmpm.ventaNeta) > 0
+                    ) VTSC
+                    LEFT JOIN (SELECT CMB.itemNumber, SUM(CMB.count) cantidad FROM vds_combo CMB WHERE CMB.idSucursal IN (" . $this->locationID . ") AND CMB.fecha BETWEEN ? AND ?  GROUP BY CMB.itemNumber) CM ON CM.itemNumber = VTSC.idMicros
+                    LEFT JOIN (SELECT A.idCombo,SUM(A.count * B.costo) costo FROM vds_combo A INNER JOIN recetas_platillo B ON A.itemNumber = B.idMicros INNER JOIN sucursales S ON S.id = A.idSucursal WHERE S.id IN (" . $this->locationID . ") AND NOT(A.idCombo = A.itemNumber) AND A.fecha BETWEEN ? AND ? GROUP BY A.idCombo) CM2 ON CM2.idCombo = VTSC.idMicros
+                UNION ALL
+                    SELECT 
+                    VM.idItem AS idMicros, '' idItemMicros, mmg.major , SUM(VM.netSales) ventaBruta,SUM(VM.netSales) ventaNeta, SUM(VM.netSales)ventaNetaImp, 0 descuento, 0 cantidad, 0 SCMB, SUM(VM.count * rp.costo) costo
+                    FROM vds_modificador VM 
+                    LEFT JOIN 
+                        micros_producto_clasificacion clas ON VM.idItem = clas.idMicros 
+                    LEFT JOIN 
+                        micros_major_group mmg ON (mmg.idMajor = clas.idMajor AND mmg.idEmpresa = ?) 
+                    LEFT JOIN recetas_platillo rp ON rp.idMicros = VM.itemNumber 
+                    WHERE 
+                    VM.idSucursal IN (" . $this->locationID . ") AND VM.fecha BETWEEN ? AND ? 
+                    GROUP BY VM.idItem, mmg.major			
+            ) AS VT GROUP BY idMicros ORDER BY ventaBruta DESC";
+
+        $tmpDetailResult = DB::select($sql, [$this->company, $this->initDate, $this->endDate, $this->initDate, $this->endDate, $this->initDate, $this->endDate, $this->company, $this->initDate, $this->endDate]);
+        
+        $tmpGrossTotal = 0;
+        $tmpNetTotal = 0;
+        $tmpventaNetaImp = 0;
+        $tmpdescuento = 0;
+        $tmpcantidad = 0;
+        $tmpcosto = 0;
+        foreach ($tmpDetailResult as $row) {
+            $tmpGrossTotal += $row->ventaBruta;
+            $tmpNetTotal += $row->ventaNeta;
+            $tmpventaNetaImp += $row->ventaNetaImp;
+            $tmpdescuento += $row->descuento;
+            $tmpcantidad += $row->cantidad;
+            $tmpcosto += $row->costo;
+        }
+
+        foreach ($tmpDetailResult as $id => $row) {
+            $tmpDetailResult[$id]->salesPercent = !empty($tmpGrossTotal) ? $row->ventaBruta * 100 / $tmpGrossTotal : 0;
+        }
+
+        $tmpDetailResult[] = json_decode(json_encode(array("idMicros" => "", "major" => "Total", "idItemMicros" => "", "ventaBruta" => $tmpGrossTotal, "ventaNeta" => $tmpNetTotal, "ventaNetaImp" => $tmpventaNetaImp, "descuento" => $tmpdescuento, "cantidad" => $tmpcantidad, "costo" => $tmpcosto, "margen" => 0, "salesPercent" => "")));
+
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->setActiveSheetIndex(0);
+        $currentSheet = $spreadsheet->getActiveSheet();
+        $spreadsheet->getDefaultStyle()->getFont()->setSize(11);
+
+        $spreadsheet->getActiveSheet()->getColumnDimension('A')->setWidth(13);
+        $spreadsheet->getActiveSheet()->getColumnDimension('B')->setWidth(20);
+        $spreadsheet->getActiveSheet()->getColumnDimension('C')->setWidth(12);
+        $spreadsheet->getActiveSheet()->getColumnDimension('D')->setWidth(12);
+        $spreadsheet->getActiveSheet()->getColumnDimension('E')->setWidth(12);
+        $spreadsheet->getActiveSheet()->getColumnDimension('F')->setWidth(12);
+
+        $currentSheet->mergeCells('B2:D2');
+        $currentSheet->mergeCells('B3:D3');
+        $currentSheet->mergeCells('B4:D4');
+        $currentSheet->mergeCells('B5:D5');
+
+        $spreadsheet->getActiveSheet()->getStyle('A2:A5')->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('ffe3e3e3');
+
+        $spreadsheet->getActiveSheet()->getStyle('A2:A5')
+            ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+
+        $spreadsheet->getActiveSheet()->getStyle('A2:D5')->getBorders()->applyFromArray(['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]);
+
+        $spreadsheet->getActiveSheet()->getStyle('A7:E7')->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('ffe3e3e3');
+
+        $currentSheet->setCellValue('A2', 'Report');
+        $currentSheet->setCellValue('A3', 'Business Date');
+        $currentSheet->setCellValue('A4', 'Location');
+        $currentSheet->setCellValue('A5', 'Export Date');
+
+        $currentSheet->setCellValue('B2', 'Menu Enginerring');
+        $currentSheet->setCellValue('B3', $this->initDate . " - " . $this->endDate);
+        $currentSheet->setCellValue('B4', strtoupper($this->location));
+        $currentSheet->setCellValue('B5', date("Y-m-d"));
+
+        $currentSheet->setCellValue('A7', 'Major Grp');
+        $currentSheet->setCellValue('B7', 'Gross Sales');
+        $currentSheet->setCellValue('C7', 'Net Sales');
+        $currentSheet->setCellValue('D7', 'Food Cost');
+        $currentSheet->setCellValue('E7', 'Sales %');
+
+        $row = 8;
+        foreach ($tmpResult as $data) {
+            $currentSheet->setCellValue('A' . $row, $data->major);
+            $currentSheet->setCellValue('B' . $row, $data->ventaNeta);
+            $currentSheet->setCellValue('C' . $row, $data->ventaBruta);
+            $currentSheet->setCellValue('D' . $row, $data->costo);
+            $currentSheet->setCellValue('E' . $row, $data->salesPercent);
+            $row++;
+        }
+
+        $endRowFormat = $row - 1;
+
+        $spreadsheet->getActiveSheet()->getStyle('A8:A' . $endRowFormat)
+            ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+        $spreadsheet->getActiveSheet()->getStyle('A7:E' . $endRowFormat)->getBorders()->applyFromArray(['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]);
+
+        $row += 2;
+
+        $initRowFormat = $row;
+
+        $currentSheet->setCellValue('A' . $row, 'Major Grp');
+        $currentSheet->setCellValue('B' . $row, 'Menu Item');
+        $currentSheet->setCellValue('C' . $row, 'Quantity');
+        $currentSheet->setCellValue('D' . $row, 'Gross Sales');
+        $currentSheet->setCellValue('E' . $row, 'Net Sales');
+        $currentSheet->setCellValue('F' . $row, 'Discount');
+        $currentSheet->setCellValue('G' . $row, 'Food Cost');
+        $currentSheet->setCellValue('H' . $row, 'Sales %');
+
+        $spreadsheet->getActiveSheet()->getStyle('A' . $row . ':H' . $row)->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('ffe3e3e3');
+
+        $row++;
+        foreach ($tmpDetailResult as $data) {
+            $currentSheet->setCellValue('A' . $row, $data->major);
+            $currentSheet->setCellValue('B' . $row, $data->idItemMicros);
+            $currentSheet->setCellValue('C' . $row, $data->cantidad);
+            $currentSheet->setCellValue('D' . $row, $data->ventaNeta);
+            $currentSheet->setCellValue('E' . $row, $data->ventaBruta);
+            $currentSheet->setCellValue('F' . $row, $data->descuento);
+            $currentSheet->setCellValue('G' . $row, $data->costo);
+            $currentSheet->setCellValue('H' . $row, $data->salesPercent);
+            $row++;
+        }
+        $endRowFormat = $row - 1;
+        $spreadsheet->getActiveSheet()->getStyle('A' . $initRowFormat . ':B' . $endRowFormat)
+            ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+        $spreadsheet->getActiveSheet()->getStyle('A' . $initRowFormat . ':H' . $endRowFormat)->getBorders()->applyFromArray(['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]);
+
+
+        $writer = IOFactory::createWriter($spreadsheet, "Xlsx");
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="MenuEng_' . date("Ymd") . '.xlsx"');
+        $writer->save("php://output");
+    }
+}

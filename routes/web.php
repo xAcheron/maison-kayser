@@ -4,6 +4,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PruebaController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\RHVacanteController;
+use App\Http\Controllers\SalesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,7 +26,7 @@ Route::get('/', function () {
 
 
 // Todo esto tiene que ver con el controlador de RH. Recuerda moverlo de tal manera que se minimice el codigo.
-Route::get('home', [HomeController::class, 'index'])->name('home');
+Route::get('home', [HomeController::class, 'index'])->name('home'); 
 Route::get('prueba', [PruebaController::class, 'index'])->name('prueba'); 
 Route::get('vacantes', [RHVacanteController::class, 'index'])->name('vacantes');
 Route::get('plantilla', [RHVacanteController::class, 'showGlobalHeadcount'])->name('plantilla');
@@ -78,9 +79,43 @@ Route::post('micros/agrupar', [RHVacanteController::class, 'agruparPerfilesEmp']
 Route::get('reports', [ReportsController::class, 'indexVue'])->name('reportsIndex');
 
 // Los reportes uwu
-Route::get("venta/mes",[SalesController::class, 'mensual'])->name('ventaMensual');
-Route::get("venta/lastyear",[SalesController::class, 'getLastYear'])->name('getLastYear');
-Route::get("reports/Budget/",[ReportsController::class, 'BudgetReport'])->name('budgetOps');
+Route::get('venta/mes',[SalesController::class, 'mensual'])->name('ventaMensual');
+Route::get('venta/lastyear',[SalesController::class, 'getLastYear'])->name('getLastYear');
+Route::get('reports/Budget/',[ReportsController::class, 'BudgetReport'])->name('budgetOps');
+Route::get('reports/VentaSemProd/', [ReportsController::class, 'VSProdReport'])->name('ventaSemProd');
+Route::get('reports/CheckListPrub/', [ReportsController::class, 'CheckListReportPage'])->name('CheckListReportPage');
+Route::get('guests/lastyear', [SalesController::class, 'getLastYearGuest'])->name('getLastYearGuest');
+Route::get('reports/guest/week', [ReportsController::class, 'GuestWeekPage'])->name('GuestWeekPage');
+Route::get('reports/delivery', [ReportsController::class, 'deliveryReport'])->name('deliveryReportPage');
+Route::get('reports/checklist/incidencias', [ReportsController::class, 'CheckListInci'])->name('CheckListInci');
+Route::get('reports/mantenimiento', [ReportsController::class, 'Mantenimiento'])->name('MantoReport');
+Route::get('reports/mantenimiento/holamundo', [ReportsController::class, 'Mantenimiento'])->name('deliveryItemReportPage'); // Este esta mal, pero para que jale
+Route::get('reports/ProductMix/', [ReportsController::class, 'ProductMixReport'])->name('reportsPMix');
+Route::get('reports/PMixTB/', [ReportsController::class, 'PMixTBReport'])->name('reportsPMixTB');
+Route::get('reports/DayPart/', [ReportsController::class, 'DayPartReport'])->name('reportsDPart');
+Route::get('reports/VIT/', [ReportsController::class, 'VITReport'])->name('reportsVIT');
+Route::get('reports/Discounts/', [ReportsController::class, 'DiscountsReport'])->name('reportsDsc');
+Route::get('dashboard-encuesta/reports', [DashboardEncuestaController::class, 'getReportsView'])->name('encuestaReports');
+Route::get('reports/Cash/', [ReportsController::class, 'CashReport'])->name('reportsCash');
+Route::get('reports/ventas/sucursal', [ReportsController::class, 'VentasSucPage'])->name('VentasSucPage');
+Route::get('inventory/cost', [InventarioController::class, 'costo'])->name('costoVenta');
+Route::get('reports/MenuEngineering/', [ReportsController::class, 'MenuEngineeringReport'])->name('reportsME');
+Route::get('reports/analisis/precio', [ReportsController::class, 'AnalisisPrecioPage'])->name('AnalisisPrecioPage');
+Route::get('venta/get/sucursales', [SalesController::class, 'getSucursales'])->name('getSucursalesVen');
+Route::get('venta/mes/detalle', [SalesController::class, 'getMensual'])->name('getDetVenta');
+Route::get('venta/mes/detalle/Xls', [SalesController::class, 'getMensualXls'])->name('getDetVentaXls');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+// Route::get('', [::class, ''])->name('');
+
+
+
+
 
 
 

@@ -1,0 +1,88 @@
+<?php
+
+namespace App\Classes\Reports\utils;
+
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class UserLocation
+{
+    private $parentLocation;
+    public $locationName;
+    public $locationID;
+    public $company;
+
+    public function get($location=0)
+    {
+        
+        $this->parentLocation = $location;
+
+        if (is_numeric($this->parentLocation) || $this->parentLocation == "All") {            
+            $locations = $this->getLocations($this->parentLocation, $this->parentLocation == "All"? 1: 0 );
+            $this->company = $this->parentLocation;
+            $this->locationName = $locations[0];
+            $this->locationID = $locations[1];
+        } 
+        else {
+            $tmpLocationInfo = $this->getLocation($this->parentLocation);
+            $this->company = $tmpLocationInfo[2];
+            $this->locationName = $tmpLocationInfo[0];
+            $this->locationID = $tmpLocationInfo[1];
+        }
+    }
+
+    public function getLocation($idLocation)
+    {
+        $sql = "SELECT * FROM sucursales WHERE idMicros = ?;";
+        $locations = DB::select($sql, [$idLocation]);
+        return array("'" . $locations[0]->idMicros . "'", $locations[0]->id,  $locations[0]->idEmpresa);
+    }
+
+    public function getLocations($idEmpresa, $all=0)
+    {
+        if($all==1)
+            $sql = "SELECT sucursales.id, sucursales.nombre, sucursales.idMicros, sucursales.idSap, sucursales.idEmpresa FROM sucursales INNER JOIN dashboard_empresa_usuario ON sucursales.idEmpresa = dashboard_empresa_usuario.idEmpresa  INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE sucursales.estado = 1 AND idUsuario = ?;";
+        else
+            $sql = "SELECT * FROM sucursales WHERE idEmpresa = ?;";
+        $locations = DB::select($sql, [($all==1?Auth::id():$idEmpresa)]);
+        $locationArr = array();
+        $locationIDArr = array();
+
+        foreach ($locations as $location) {
+            $locationArr[] = "'" . $location->idMicros . "'";
+            $locationIDArr[] = $location->id;
+        }
+        return array(implode(",", $locationArr), implode(",", $locationIDArr));
+    }
+
+    public function getHierachy($onlyCompanies=0)
+    {
+        $sql = "SELECT empresas.* FROM dashboard_empresa_usuario INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE idUsuario = ?;";
+        $empresas = DB::select($sql, [Auth::id()]);
+        $hierachy = array();
+
+        if($onlyCompanies==0)
+        {
+            foreach ($empresas as $empresa) {
+                if (session('RepRole') ==1)
+                    $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1);
+                if (session('RepRole') >1)
+                    $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND id IN (" . session('sucursales') . ") AND estado = 1 AND idTipo > 0 ORDER BY nombre;";
+                else
+                    $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND estado = 1 AND idTipo > 0 ORDER BY nombre;";
+                $sucursales = DB::select($sql, [$empresa->idEmpresa]);
+
+                foreach ($sucursales as $sucursal) {
+                    $hierachy[] = array("id" => $sucursal->idMicros, "nombre" => $sucursal->nombre, "tipo" => 2);
+                }
+            }
+        }
+        else
+        {
+            foreach ($empresas as $empresa) 
+                $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1);
+        }
+
+        return $hierachy;
+    }
+}

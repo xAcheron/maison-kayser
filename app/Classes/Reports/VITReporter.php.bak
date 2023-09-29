@@ -1,0 +1,989 @@
+<?php
+
+namespace App\Classes\Reports;
+
+use Illuminate\Support\Facades\DB;
+use App\Classes\Reports\IReporter;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+
+class VITReporter implements iReporter {
+
+    private $initDate;
+    private $endDate;
+    private $initDateLw;
+    private $endDateLw;
+    private $location;
+    private $locationID;
+    private $result;
+    private $tier;
+    private $storelabel;
+
+    public function setParams($params)
+    {
+        $tmpDates = explode(" - ", $params["daterange"]);
+        $this->initDate = $tmpDates[0];
+        $this->endDate = $tmpDates[1];
+
+        $date = strtotime($tmpDates[0]);
+
+        $this->initDateLw = date('Y-m-d', strtotime("-7 day", $date));
+        $this->endDateLw = date('Y-m-d', strtotime("-1 day", $date));
+
+        $this->location = $params["location"];
+        $this->tier = empty($params["tier"])?0:$params["tier"];
+        
+        if(is_numeric($params["location"]))
+            $locations = $this->getLocations($params["location"]);
+        else
+            $locations = $this->getLocation($params["location"]);
+        
+        $this->location = $locations[0];
+        $this->locationID = $locations[1];
+        $this->perSales = empty($params["perSales"])?100:$params["perSales"];
+        $this->storelabel = $locations[2];
+    }
+    
+    public function getLocation($idLocation)
+    {
+        $sql = "SELECT * FROM sucursales WHERE idMicros = ?;";
+        $locations = DB::select($sql,[$idLocation]);
+        
+        return array( "'".$locations[0]->idMicros."'", $locations[0]->id,  $locations[0]->nombre);
+    }
+
+    public function getLocations($idEmpresa)
+    {
+        $sql = "SELECT sucursales.*, empresas.comun FROM sucursales INNER JOIN empresas ON empresas.idEmpresa = sucursales.idEmpresa WHERE ".(empty($this->tier) || $this->tier == "null" ?"": " idTier = ".$this->tier." AND ")." sucursales.idEmpresa = ?;";
+        $locations = DB::select($sql,[$idEmpresa]);
+        
+        $locationArr = array();
+        $locationIDArr = array();
+
+        foreach($locations as $location)
+        {
+            $locationArr[] = "'".$location->idMicros."'";
+            $locationIDArr[] = "'".$location->id."'";
+            $empresa = $location->comun;
+        }
+
+        return array(implode(",",$locationArr), implode(",",$locationIDArr), $empresa);
+        
+    }
+
+    public function runReport(){
+
+        //$sql = "SELECT G.rvc, SUM(G.guestsBreakfast), SUM(G.guestsLunch), SUM(G.guestsDinner), SUM(G.guestsNight),  SUM(G.netSalesBreakfast), SUM(G.netSalesLunch), SUM(G.netSalesDinner), SUM(G.netSalesNight),SUM(G.netSalesBreakfast)/COALESCE(SUM(G.guestsBreakfast),1), SUM(G.netSalesLunch)/COALESCE(SUM(G.guestsLunch),1), SUM(G.netSalesDinner)/COALESCE(SUM(G.guestsDinner),1), SUM(G.netSalesNight)/COALESCE(SUM(G.guestsNight),1) FROM vds_guests G WHERE idSucursal IN (".$this->locationID.") AND fecha BETWEEN ? AND ? GROUP BY G.rvc";
+        $sql = "SELECT 
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)) gbl, 
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)) gbm, 
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)) gbmr, 
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)) gbj, 
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)) gbv, 
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)) gbs, 
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)) gbd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)) gll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)) glm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)) glmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)) glj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)) glv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)) gls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)) gld,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)) gdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)) gdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)) gdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)) gdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)) gdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)) gds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)) gdd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)) gnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)) gnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)) gnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)) gnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)) gnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)) gns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)) gnd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)) nsbl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)) nsbm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)) nsbmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)) nsbj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)) nsbv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)) nsbs,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)) nsbd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)) nsll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)) nslm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)) nslmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)) nslj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)) nslv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)) nsls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)) nsld,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)) nsdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)) nsdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)) nsdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)) nsdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)) nsdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)) nsds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)) nsdd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)) nsnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)) nsnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)) nsnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)) nsnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)) nsnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)) nsns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)) nsnd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)),1) avgbl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)),1) avgbm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)),1) avgbmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)),1) avgbj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)),1) avgbv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)),1) avgbs,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)),1) avgbd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)),1) avgll,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)),1) avglm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)),1) avglmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)),1) avglj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)),1) avglv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)),1) avgls,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)),1) avgld,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)),1) avgdl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)),1) avgdm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)),1) avgdmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)),1) avgdj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)),1) avgdv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)),1) avgds,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)),1) avgdd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)),1) avgnl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)),1) avgnm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)),1) avgnmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)),1) avgnj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)),1) avgnv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)),1) avgns,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)),1) avgnd,
+        SUM(G.guestsBreakfast) gb,
+        SUM(G.guestsLunch) gl,
+        SUM(G.guestsDinner) gd,
+        SUM(G.guestsNight) gn,
+        SUM(G.netSalesBreakfast) nsb,
+        SUM(G.netSalesLunch) nsl,
+        SUM(G.netSalesDinner) nsd,
+        SUM(G.netSalesNight) nsn,
+        COALESCE(SUM(G.netSalesBreakfast),0)/ COALESCE(SUM(G.guestsBreakfast),1) avgb,
+        COALESCE(SUM(G.netSalesLunch),0)/ COALESCE(SUM(G.guestsLunch),1) avgl,
+        COALESCE(SUM(G.netSalesDinner),0)/ COALESCE(SUM(G.guestsDinner),1) avgd,
+        COALESCE(SUM(G.netSalesNight),0)/ COALESCE(SUM(G.guestsNight),1) avgn
+        FROM vds_guests G
+        WHERE idSucursal IN (".$this->locationID.") AND fecha BETWEEN ? AND ?
+        GROUP BY YEAR(fecha);";
+        $rvc = DB::select($sql,[$this->initDate, $this->endDate]);
+
+        $sql = "SELECT 
+        SUM(G.guestsBreakfast) gb,
+        SUM(G.guestsLunch) gl,
+        SUM(G.guestsDinner) gd,
+        SUM(G.guestsNight) gn,
+        SUM(G.netSalesBreakfast) nsb,
+        SUM(G.netSalesLunch) nsl,
+        SUM(G.netSalesDinner) nsd,
+        SUM(G.netSalesNight) nsn,
+        COALESCE(SUM(G.netSalesBreakfast),0)/ COALESCE(SUM(G.guestsBreakfast),1) avgb,
+        COALESCE(SUM(G.netSalesLunch),0)/ COALESCE(SUM(G.guestsLunch),1) avgl,
+        COALESCE(SUM(G.netSalesDinner),0)/ COALESCE(SUM(G.guestsDinner),1) avgd,
+        COALESCE(SUM(G.netSalesNight),0)/ COALESCE(SUM(G.guestsNight),1) avgn,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)) gbl, 
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)) gbm, 
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)) gbmr, 
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)) gbj, 
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)) gbv, 
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)) gbs, 
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)) gbd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)) gll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)) glm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)) glmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)) glj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)) glv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)) gls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)) gld,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)) gdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)) gdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)) gdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)) gdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)) gdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)) gds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)) gdd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)) gnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)) gnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)) gnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)) gnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)) gnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)) gns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)) gnd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)) nsbl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)) nsbm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)) nsbmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)) nsbj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)) nsbv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)) nsbs,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)) nsbd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)) nsll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)) nslm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)) nslmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)) nslj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)) nslv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)) nsls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)) nsld,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)) nsdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)) nsdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)) nsdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)) nsdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)) nsdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)) nsds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)) nsdd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)) nsnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)) nsnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)) nsnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)) nsnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)) nsnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)) nsns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)) nsnd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)),1) avgbl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)),1) avgbm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)),1) avgbmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)),1) avgbj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)),1) avgbv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)),1) avgbs,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)),1) avgbd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)),1) avgll,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)),1) avglm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)),1) avglmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)),1) avglj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)),1) avglv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)),1) avgls,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)),1) avgld,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)),1) avgdl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)),1) avgdm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)),1) avgdmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)),1) avgdj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)),1) avgdv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)),1) avgds,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)),1) avgdd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)),1) avgnl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)),1) avgnm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)),1) avgnmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)),1) avgnj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)),1) avgnv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)),1) avgns,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)),1) avgnd
+        FROM vds_guests G
+        WHERE idSucursal IN (".$this->locationID.") AND fecha BETWEEN ? AND ?
+        GROUP BY YEAR(fecha);";
+        $rvclw = DB::select($sql,[$this->initDateLw, $this->endDateLw]);
+
+        $rvclw[0]->gb = (1 -($rvclw[0]->gb/(!empty($rvc[0]->gb)?$rvc[0]->gb:1)))*100 ;
+        $rvclw[0]->gl = (1 -($rvclw[0]->gl/(!empty($rvc[0]->gl)?$rvc[0]->gl:1)))*100 ;
+        $rvclw[0]->gd = (1 -($rvclw[0]->gd/(!empty($rvc[0]->gd)?$rvc[0]->gd:1)))*100 ;
+        $rvclw[0]->gn = (1 -($rvclw[0]->gn/(!empty($rvc[0]->gn)?$rvc[0]->gn:1)))*100 ;
+        $rvclw[0]->nsb = (1 -($rvclw[0]->nsb/(!empty($rvc[0]->nsb)?$rvc[0]->nsb:1)))*100 ;
+        $rvclw[0]->nsl = (1 -($rvclw[0]->nsl/(!empty($rvc[0]->nsl)?$rvc[0]->nsl:1)))*100 ;
+        $rvclw[0]->nsd = (1 -($rvclw[0]->nsd/(!empty($rvc[0]->nsd)?$rvc[0]->nsd:1)))*100 ;
+        $rvclw[0]->nsn = (1 -($rvclw[0]->nsn/(!empty($rvc[0]->nsn)?$rvc[0]->nsn:1)))*100 ;
+        $rvclw[0]->avgb = (1 -($rvclw[0]->avgb/(!empty($rvc[0]->avgb)?$rvc[0]->avgb:1)))*100 ;
+        $rvclw[0]->avgl = (1 -($rvclw[0]->avgl/(!empty($rvc[0]->avgl)?$rvc[0]->avgl:1)))*100 ;
+        $rvclw[0]->avgd = (1 -($rvclw[0]->avgd/(!empty($rvc[0]->avgd)?$rvc[0]->avgd:1)))*100 ;
+        $rvclw[0]->avgn = (1 -($rvclw[0]->avgn/(!empty($rvc[0]->avgn)?$rvc[0]->avgn:1)))*100 ;        
+        $rvclw[0]->gbl = (1 -($rvclw[0]->gbl/(!empty($rvc[0]->gbl)?$rvc[0]->gbl:1)))*100;
+        $rvclw[0]->gbm = (1 -($rvclw[0]->gbm/(!empty($rvc[0]->gbm)?$rvc[0]->gbm:1)))*100;
+        $rvclw[0]->gbmr = (1 -($rvclw[0]->gbmr/(!empty($rvc[0]->gbmr)?$rvc[0]->gbmr:1)))*100;
+        $rvclw[0]->gbj = (1 -($rvclw[0]->gbj/(!empty($rvc[0]->gbj)?$rvc[0]->gbj:1)))*100;
+        $rvclw[0]->gbv = (1 -($rvclw[0]->gbv/(!empty($rvc[0]->gbv)?$rvc[0]->gbv:1)))*100 ;
+        $rvclw[0]->gbs = (1 -($rvclw[0]->gbs/(!empty($rvc[0]->gbs)?$rvc[0]->gbs:1)))*100 ;
+        $rvclw[0]->gbd = (1 -($rvclw[0]->gbd/(!empty($rvc[0]->gbd)?$rvc[0]->gbd:1)))*100 ;
+        $rvclw[0]->gll = (1 -($rvclw[0]->gll/(!empty($rvc[0]->gll)?$rvc[0]->gll:1)))*100 ;
+        $rvclw[0]->glm = (1 -($rvclw[0]->glm/(!empty($rvc[0]->glm)?$rvc[0]->glm:1)))*100 ;
+        $rvclw[0]->glmr = (1 -($rvclw[0]->glmr/(!empty($rvc[0]->glmr)?$rvc[0]->glmr:1)))*100 ;
+        $rvclw[0]->glj = (1 -($rvclw[0]->glj/(!empty($rvc[0]->glj)?$rvc[0]->glj:1)))*100 ;
+        $rvclw[0]->glv = (1 -($rvclw[0]->glv/(!empty($rvc[0]->glv)?$rvc[0]->glv:1)))*100 ;
+        $rvclw[0]->gls = (1 -($rvclw[0]->gls/(!empty($rvc[0]->gls)?$rvc[0]->gls:1)))*100 ;
+        $rvclw[0]->gld = (1 -($rvclw[0]->gld/(!empty($rvc[0]->gld)?$rvc[0]->gld:1)))*100 ;
+        $rvclw[0]->gdl = (1 -($rvclw[0]->gdl/(!empty($rvc[0]->gdl)?$rvc[0]->gdl:1)))*100 ;
+        $rvclw[0]->gdm = (1 -($rvclw[0]->gdm/(!empty($rvc[0]->gdm)?$rvc[0]->gdm:1)))*100 ;
+        $rvclw[0]->gdmr = (1 -($rvclw[0]->gdmr/(!empty($rvc[0]->gdmr)?$rvc[0]->gdmr:1)))*100 ;
+        $rvclw[0]->gdj = (1 -($rvclw[0]->gdj/(!empty($rvc[0]->gdj)?$rvc[0]->gdj:1)))*100 ;
+        $rvclw[0]->gdv = (1 -($rvclw[0]->gdv/(!empty($rvc[0]->gdv)?$rvc[0]->gdv:1)))*100 ;
+        $rvclw[0]->gds = (1 -($rvclw[0]->gds/(!empty($rvc[0]->gds)?$rvc[0]->gds:1)))*100 ;
+        $rvclw[0]->gdd = (1 -($rvclw[0]->gdd/(!empty($rvc[0]->gdd)?$rvc[0]->gdd:1)))*100 ;
+        $rvclw[0]->gnl = (1 -($rvclw[0]->gnl/(!empty($rvc[0]->gnl)?$rvc[0]->gnl:1)))*100 ;
+        $rvclw[0]->gnm = (1 -($rvclw[0]->gnm/(!empty($rvc[0]->gnm)?$rvc[0]->gnm:1)))*100 ;
+        $rvclw[0]->gnmr = (1 -($rvclw[0]->gnmr/(!empty($rvc[0]->gnmr)?$rvc[0]->gnmr:1)))*100 ;
+        $rvclw[0]->gnj = (1 -($rvclw[0]->gnj/(!empty($rvc[0]->gnj)?$rvc[0]->gnj:1)))*100 ;
+        $rvclw[0]->gnv = (1 -($rvclw[0]->gnv/(!empty($rvc[0]->gnv)?$rvc[0]->gnv:1)))*100 ;
+        $rvclw[0]->gns = (1 -($rvclw[0]->gns/(!empty($rvc[0]->gns)?$rvc[0]->gns:1)))*100 ;
+        $rvclw[0]->gnd = (1 -($rvclw[0]->gnd/(!empty($rvc[0]->gnd)?$rvc[0]->gnd:1)))*100 ;
+        $rvclw[0]->nsbl = (1 -($rvclw[0]->nsbl/(!empty($rvc[0]->nsbl)?$rvc[0]->nsbl:1)))*100 ;
+        $rvclw[0]->nsbm = (1 -($rvclw[0]->nsbm/(!empty($rvc[0]->nsbm)?$rvc[0]->nsbm:1)))*100 ;
+        $rvclw[0]->nsbmr = (1 -($rvclw[0]->nsbmr/(!empty($rvc[0]->nsbmr)?$rvc[0]->nsbmr:1)))*100 ;
+        $rvclw[0]->nsbj = (1 -($rvclw[0]->nsbj/(!empty($rvc[0]->nsbj)?$rvc[0]->nsbj:1)))*100 ;
+        $rvclw[0]->nsbv = (1 -($rvclw[0]->nsbv/(!empty($rvc[0]->nsbv)?$rvc[0]->nsbv:1)))*100 ;
+        $rvclw[0]->nsbs = (1 -($rvclw[0]->nsbs/(!empty($rvc[0]->nsbs)?$rvc[0]->nsbs:1)))*100 ;
+        $rvclw[0]->nsbd = (1 -($rvclw[0]->nsbd/(!empty($rvc[0]->nsbd)?$rvc[0]->nsbd:1)))*100 ;
+        $rvclw[0]->nsll = (1 -($rvclw[0]->nsll/(!empty($rvc[0]->nsll)?$rvc[0]->nsll:1)))*100 ;
+        $rvclw[0]->nslm = (1 -($rvclw[0]->nslm/(!empty($rvc[0]->nslm)?$rvc[0]->nslm:1)))*100 ;
+        $rvclw[0]->nslmr = (1 -($rvclw[0]->nslmr/(!empty($rvc[0]->nslmr)?$rvc[0]->nslmr:1)))*100 ;
+        $rvclw[0]->nslj = (1 -($rvclw[0]->nslj/(!empty($rvc[0]->nslj)?$rvc[0]->nslj:1)))*100 ;
+        $rvclw[0]->nslv = (1 -($rvclw[0]->nslv/(!empty($rvc[0]->nslv)?$rvc[0]->nslv:1)))*100 ;
+        $rvclw[0]->nsls = (1 -($rvclw[0]->nsls/(!empty($rvc[0]->nsls)?$rvc[0]->nsls:1)))*100 ;
+        $rvclw[0]->nsld = (1 -($rvclw[0]->nsld/(!empty($rvc[0]->nsld)?$rvc[0]->nsld:1)))*100 ;
+        $rvclw[0]->nsdl = (1 -($rvclw[0]->nsdl/(!empty($rvc[0]->nsdl)?$rvc[0]->nsdl:1)))*100 ;
+        $rvclw[0]->nsdm = (1 -($rvclw[0]->nsdm/(!empty($rvc[0]->nsdm)?$rvc[0]->nsdm:1)))*100 ;
+        $rvclw[0]->nsdmr = (1 -($rvclw[0]->nsdmr/(!empty($rvc[0]->nsdmr)?$rvc[0]->nsdmr:1)))*100 ;
+        $rvclw[0]->nsdj = (1 -($rvclw[0]->nsdj/(!empty($rvc[0]->nsdj)?$rvc[0]->nsdj:1)))*100 ;
+        $rvclw[0]->nsdv = (1 -($rvclw[0]->nsdv/(!empty($rvc[0]->nsdv)?$rvc[0]->nsdv:1)))*100 ;
+        $rvclw[0]->nsds = (1 -($rvclw[0]->nsds/(!empty($rvc[0]->nsds)?$rvc[0]->nsds:1)))*100 ;
+        $rvclw[0]->nsdd = (1 -($rvclw[0]->nsdd/(!empty($rvc[0]->nsdd)?$rvc[0]->nsdd:1)))*100 ;
+        $rvclw[0]->nsnl = (1 -($rvclw[0]->nsnl/(!empty($rvc[0]->nsnl)?$rvc[0]->nsnl:1)))*100 ;
+        $rvclw[0]->nsnm = (1 -($rvclw[0]->nsnm/(!empty($rvc[0]->nsnm)?$rvc[0]->nsnm:1)))*100 ;
+        $rvclw[0]->nsnmr = (1 -($rvclw[0]->nsnmr/(!empty($rvc[0]->nsnmr)?$rvc[0]->nsnmr:1)))*100 ;
+        $rvclw[0]->nsnj = (1 -($rvclw[0]->nsnj/(!empty($rvc[0]->nsnj)?$rvc[0]->nsnj:1)))*100 ;
+        $rvclw[0]->nsnv = (1 -($rvclw[0]->nsnv/(!empty($rvc[0]->nsnv)?$rvc[0]->nsnv:1)))*100 ;
+        $rvclw[0]->nsns = (1 -($rvclw[0]->nsns/(!empty($rvc[0]->nsns)?$rvc[0]->nsns:1)))*100 ;
+        $rvclw[0]->nsnd = (1 -($rvclw[0]->nsnd/(!empty($rvc[0]->nsnd)?$rvc[0]->nsnd:1)))*100 ;
+        $rvclw[0]->avgbl = (1 -($rvclw[0]->avgbl/(!empty($rvc[0]->avgbl)?$rvc[0]->avgbl:1)))*100 ;
+        $rvclw[0]->avgbm = (1 -($rvclw[0]->avgbm/(!empty($rvc[0]->avgbm)?$rvc[0]->avgbm:1)))*100 ;
+        $rvclw[0]->avgbmr = (1 -($rvclw[0]->avgbmr/(!empty($rvc[0]->avgbmr)?$rvc[0]->avgbmr:1)))*100 ;
+        $rvclw[0]->avgbj = (1 -($rvclw[0]->avgbj/(!empty($rvc[0]->avgbj)?$rvc[0]->avgbj:1)))*100 ;
+        $rvclw[0]->avgbv = (1 -($rvclw[0]->avgbv/(!empty($rvc[0]->avgbv)?$rvc[0]->avgbv:1)))*100 ;
+        $rvclw[0]->avgbs = (1 -($rvclw[0]->avgbs/(!empty($rvc[0]->avgbs)?$rvc[0]->avgbs:1)))*100 ;
+        $rvclw[0]->avgbd = (1 -($rvclw[0]->avgbd/(!empty($rvc[0]->avgbd)?$rvc[0]->avgbd:1)))*100 ;
+        $rvclw[0]->avgll = (1 -($rvclw[0]->avgll/(!empty($rvc[0]->avgll)?$rvc[0]->avgll:1)))*100 ;
+        $rvclw[0]->avglm = (1 -($rvclw[0]->avglm/(!empty($rvc[0]->avglm)?$rvc[0]->avglm:1)))*100 ;
+        $rvclw[0]->avglmr = (1 -($rvclw[0]->avglmr/(!empty($rvc[0]->avglmr)?$rvc[0]->avglmr:1)))*100 ;
+        $rvclw[0]->avglj = (1 -($rvclw[0]->avglj/(!empty($rvc[0]->avglj)?$rvc[0]->avglj:1)))*100 ;
+        $rvclw[0]->avglv = (1 -($rvclw[0]->avglv/(!empty($rvc[0]->avglv)?$rvc[0]->avglv:1)))*100 ;
+        $rvclw[0]->avgls = (1 -($rvclw[0]->avgls/(!empty($rvc[0]->avgls)?$rvc[0]->avgls:1)))*100 ;
+        $rvclw[0]->avgld = (1 -($rvclw[0]->avgld/(!empty($rvc[0]->avgld)?$rvc[0]->avgld:1)))*100 ;
+        $rvclw[0]->avgdl = (1 -($rvclw[0]->avgdl/(!empty($rvc[0]->avgdl)?$rvc[0]->avgdl:1)))*100 ;
+        $rvclw[0]->avgdm = (1 -($rvclw[0]->avgdm/(!empty($rvc[0]->avgdm)?$rvc[0]->avgdm:1)))*100 ;
+        $rvclw[0]->avgdmr = (1 -($rvclw[0]->avgdmr/(!empty($rvc[0]->avgdmr)?$rvc[0]->avgdmr:1)))*100 ;
+        $rvclw[0]->avgdj = (1 -($rvclw[0]->avgdj/(!empty($rvc[0]->avgdj)?$rvc[0]->avgdj:1)))*100 ;
+        $rvclw[0]->avgdv = (1 -($rvclw[0]->avgdv/(!empty($rvc[0]->avgdv)?$rvc[0]->avgdv:1)))*100 ;
+        $rvclw[0]->avgds = (1 -($rvclw[0]->avgds/(!empty($rvc[0]->avgds)?$rvc[0]->avgds:1)))*100 ;
+        $rvclw[0]->avgdd = (1 -($rvclw[0]->avgdd/(!empty($rvc[0]->avgdd)?$rvc[0]->avgdd:1)))*100 ;
+        $rvclw[0]->avgnl = (1 -($rvclw[0]->avgnl/(!empty($rvc[0]->avgnl)?$rvc[0]->avgnl:1)))*100 ;
+        $rvclw[0]->avgnm = (1 -($rvclw[0]->avgnm/(!empty($rvc[0]->avgnm)?$rvc[0]->avgnm:1)))*100 ;
+        $rvclw[0]->avgnmr = (1 -($rvclw[0]->avgnmr/(!empty($rvc[0]->avgnmr)?$rvc[0]->avgnmr:1)))*100 ;
+        $rvclw[0]->avgnj = (1 -($rvclw[0]->avgnj/(!empty($rvc[0]->avgnj)?$rvc[0]->avgnj:1)))*100 ;
+        $rvclw[0]->avgnv = (1 -($rvclw[0]->avgnv/(!empty($rvc[0]->avgnv)?$rvc[0]->avgnv:1)))*100 ;
+        $rvclw[0]->avgns = (1 -($rvclw[0]->avgns/(!empty($rvc[0]->avgns)?$rvc[0]->avgns:1)))*100 ;
+        $rvclw[0]->avgnd = (1 -($rvclw[0]->avgnd/(!empty($rvc[0]->avgnd)?$rvc[0]->avgnd:1)))*100 ;
+        $this->result = json_decode(json_encode(array("dps" => $rvc, "dpslw" => $rvclw, "store" => $this->storelabel )));
+
+    }
+
+    public function getResult($type){
+        if($type == "xlsx"){
+            $this->exportReport();
+        }
+        else
+        {
+            $parser = new ReportParser($type);
+            return $parser->parse($this->result);
+        }
+    }
+
+    public function exportReport()
+    {
+        
+        $sql = "SELECT 
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)) gbl, 
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)) gbm, 
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)) gbmr, 
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)) gbj, 
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)) gbv, 
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)) gbs, 
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)) gbd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)) gll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)) glm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)) glmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)) glj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)) glv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)) gls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)) gld,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)) gdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)) gdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)) gdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)) gdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)) gdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)) gds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)) gdd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)) gnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)) gnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)) gnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)) gnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)) gnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)) gns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)) gnd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)) nsbl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)) nsbm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)) nsbmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)) nsbj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)) nsbv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)) nsbs,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)) nsbd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)) nsll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)) nslm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)) nslmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)) nslj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)) nslv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)) nsls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)) nsld,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)) nsdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)) nsdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)) nsdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)) nsdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)) nsdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)) nsds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)) nsdd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)) nsnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)) nsnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)) nsnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)) nsnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)) nsnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)) nsns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)) nsnd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)),1) avgbl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)),1) avgbm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)),1) avgbmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)),1) avgbj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)),1) avgbv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)),1) avgbs,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)),1) avgbd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)),1) avgll,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)),1) avglm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)),1) avglmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)),1) avglj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)),1) avglv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)),1) avgls,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)),1) avgld,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)),1) avgdl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)),1) avgdm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)),1) avgdmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)),1) avgdj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)),1) avgdv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)),1) avgds,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)),1) avgdd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)),1) avgnl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)),1) avgnm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)),1) avgnmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)),1) avgnj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)),1) avgnv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)),1) avgns,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)),1) avgnd,
+        SUM(G.guestsBreakfast) gb,
+        SUM(G.guestsLunch) gl,
+        SUM(G.guestsDinner) gd,
+        SUM(G.guestsNight) gn,
+        SUM(G.netSalesBreakfast) nsb,
+        SUM(G.netSalesLunch) nsl,
+        SUM(G.netSalesDinner) nsd,
+        SUM(G.netSalesNight) nsn,
+        COALESCE(SUM(G.netSalesBreakfast),0)/ COALESCE(SUM(G.guestsBreakfast),1) avgb,
+        COALESCE(SUM(G.netSalesLunch),0)/ COALESCE(SUM(G.guestsLunch),1) avgl,
+        COALESCE(SUM(G.netSalesDinner),0)/ COALESCE(SUM(G.guestsDinner),1) avgd,
+        COALESCE(SUM(G.netSalesNight),0)/ COALESCE(SUM(G.guestsNight),1) avgn
+        FROM vds_guests G
+        WHERE idSucursal IN (".$this->locationID.") AND fecha BETWEEN ? AND ?
+        GROUP BY YEAR(fecha);";
+        $rvc = DB::select($sql,[$this->initDate, $this->endDate]);
+
+        $sql = "SELECT 
+        SUM(G.guestsBreakfast) gb,
+        SUM(G.guestsLunch) gl,
+        SUM(G.guestsDinner) gd,
+        SUM(G.guestsNight) gn,
+        SUM(G.netSalesBreakfast) nsb,
+        SUM(G.netSalesLunch) nsl,
+        SUM(G.netSalesDinner) nsd,
+        SUM(G.netSalesNight) nsn,
+        COALESCE(SUM(G.netSalesBreakfast),0)/ COALESCE(SUM(G.guestsBreakfast),1) avgb,
+        COALESCE(SUM(G.netSalesLunch),0)/ COALESCE(SUM(G.guestsLunch),1) avgl,
+        COALESCE(SUM(G.netSalesDinner),0)/ COALESCE(SUM(G.guestsDinner),1) avgd,
+        COALESCE(SUM(G.netSalesNight),0)/ COALESCE(SUM(G.guestsNight),1) avgn,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)) gbl, 
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)) gbm, 
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)) gbmr, 
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)) gbj, 
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)) gbv, 
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)) gbs, 
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)) gbd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)) gll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)) glm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)) glmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)) glj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)) glv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)) gls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)) gld,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)) gdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)) gdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)) gdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)) gdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)) gdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)) gds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)) gdd,
+        SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)) gnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)) gnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)) gnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)) gnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)) gnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)) gns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)) gnd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)) nsbl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)) nsbm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)) nsbmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)) nsbj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)) nsbv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)) nsbs,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)) nsbd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)) nsll,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)) nslm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)) nslmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)) nslj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)) nslv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)) nsls,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)) nsld,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)) nsdl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)) nsdm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)) nsdmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)) nsdj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)) nsdv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)) nsds,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)) nsdd,        
+        SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)) nsnl,
+        SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)) nsnm,
+        SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)) nsnmr,
+        SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)) nsnj,
+        SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)) nsnv,
+        SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)) nsns,
+        SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)) nsnd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsBreakfast,0)),1) avgbl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsBreakfast,0)),1) avgbm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsBreakfast,0)),1) avgbmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsBreakfast,0)),1) avgbj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsBreakfast,0)),1) avgbv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsBreakfast,0)),1) avgbs,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesBreakfast,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsBreakfast,0)),1) avgbd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsLunch,0)),1) avgll,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsLunch,0)),1) avglm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsLunch,0)),1) avglmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsLunch,0)),1) avglj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsLunch,0)),1) avglv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsLunch,0)),1) avgls,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesLunch,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsLunch,0)),1) avgld,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsDinner,0)),1) avgdl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsDinner,0)),1) avgdm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsDinner,0)),1) avgdmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsDinner,0)),1) avgdj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsDinner,0)),1) avgdv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsDinner,0)),1) avgds,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesDinner,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsDinner,0)),1) avgdd,        
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=2, G.guestsNight,0)),1) avgnl,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=3, G.guestsNight,0)),1) avgnm,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=4, G.guestsNight,0)),1) avgnmr,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=5, G.guestsNight,0)),1) avgnj,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=6, G.guestsNight,0)),1) avgnv,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=7, G.guestsNight,0)),1) avgns,
+        COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.netSalesNight,0)),0)/ COALESCE(SUM(IF(DAYOFWEEK(fecha)=1, G.guestsNight,0)),1) avgnd
+        FROM vds_guests G
+        WHERE idSucursal IN (".$this->locationID.") AND fecha BETWEEN ? AND ?
+        GROUP BY YEAR(fecha);";
+        $rvclw = DB::select($sql,[$this->initDateLw, $this->endDateLw]);
+
+        $rvclw[0]->gb = (1 -($rvclw[0]->gb/(!empty($rvc[0]->gb)?$rvc[0]->gb:1)))*100 ;
+        $rvclw[0]->gl = (1 -($rvclw[0]->gl/(!empty($rvc[0]->gl)?$rvc[0]->gl:1)))*100 ;
+        $rvclw[0]->gd = (1 -($rvclw[0]->gd/(!empty($rvc[0]->gd)?$rvc[0]->gd:1)))*100 ;
+        $rvclw[0]->gn = (1 -($rvclw[0]->gn/(!empty($rvc[0]->gn)?$rvc[0]->gn:1)))*100 ;
+        $rvclw[0]->nsb = (1 -($rvclw[0]->nsb/(!empty($rvc[0]->nsb)?$rvc[0]->nsb:1)))*100 ;
+        $rvclw[0]->nsl = (1 -($rvclw[0]->nsl/(!empty($rvc[0]->nsl)?$rvc[0]->nsl:1)))*100 ;
+        $rvclw[0]->nsd = (1 -($rvclw[0]->nsd/(!empty($rvc[0]->nsd)?$rvc[0]->nsd:1)))*100 ;
+        $rvclw[0]->nsn = (1 -($rvclw[0]->nsn/(!empty($rvc[0]->nsn)?$rvc[0]->nsn:1)))*100 ;
+        $rvclw[0]->avgb = (1 -($rvclw[0]->avgb/(!empty($rvc[0]->avgb)?$rvc[0]->avgb:1)))*100 ;
+        $rvclw[0]->avgl = (1 -($rvclw[0]->avgl/(!empty($rvc[0]->avgl)?$rvc[0]->avgl:1)))*100 ;
+        $rvclw[0]->avgd = (1 -($rvclw[0]->avgd/(!empty($rvc[0]->avgd)?$rvc[0]->avgd:1)))*100 ;
+        $rvclw[0]->avgn = (1 -($rvclw[0]->avgn/(!empty($rvc[0]->avgn)?$rvc[0]->avgn:1)))*100 ;  
+        $rvclw[0]->gbl = (1 -($rvclw[0]->gbl/(!empty($rvc[0]->gbl)?$rvc[0]->gbl:1)))*100;
+        $rvclw[0]->gbm = (1 -($rvclw[0]->gbm/(!empty($rvc[0]->gbm)?$rvc[0]->gbm:1)))*100;
+        $rvclw[0]->gbmr = (1 -($rvclw[0]->gbmr/(!empty($rvc[0]->gbmr)?$rvc[0]->gbmr:1)))*100;
+        $rvclw[0]->gbj = (1 -($rvclw[0]->gbj/(!empty($rvc[0]->gbj)?$rvc[0]->gbj:1)))*100;
+        $rvclw[0]->gbv = (1 -($rvclw[0]->gbv/(!empty($rvc[0]->gbv)?$rvc[0]->gbv:1)))*100 ;
+        $rvclw[0]->gbs = (1 -($rvclw[0]->gbs/(!empty($rvc[0]->gbs)?$rvc[0]->gbs:1)))*100 ;
+        $rvclw[0]->gbd = (1 -($rvclw[0]->gbd/(!empty($rvc[0]->gbd)?$rvc[0]->gbd:1)))*100 ;
+        $rvclw[0]->gll = (1 -($rvclw[0]->gll/(!empty($rvc[0]->gll)?$rvc[0]->gll:1)))*100 ;
+        $rvclw[0]->glm = (1 -($rvclw[0]->glm/(!empty($rvc[0]->glm)?$rvc[0]->glm:1)))*100 ;
+        $rvclw[0]->glmr = (1 -($rvclw[0]->glmr/(!empty($rvc[0]->glmr)?$rvc[0]->glmr:1)))*100 ;
+        $rvclw[0]->glj = (1 -($rvclw[0]->glj/(!empty($rvc[0]->glj)?$rvc[0]->glj:1)))*100 ;
+        $rvclw[0]->glv = (1 -($rvclw[0]->glv/(!empty($rvc[0]->glv)?$rvc[0]->glv:1)))*100 ;
+        $rvclw[0]->gls = (1 -($rvclw[0]->gls/(!empty($rvc[0]->gls)?$rvc[0]->gls:1)))*100 ;
+        $rvclw[0]->gld = (1 -($rvclw[0]->gld/(!empty($rvc[0]->gld)?$rvc[0]->gld:1)))*100 ;
+        $rvclw[0]->gdl = (1 -($rvclw[0]->gdl/(!empty($rvc[0]->gdl)?$rvc[0]->gdl:1)))*100 ;
+        $rvclw[0]->gdm = (1 -($rvclw[0]->gdm/(!empty($rvc[0]->gdm)?$rvc[0]->gdm:1)))*100 ;
+        $rvclw[0]->gdmr = (1 -($rvclw[0]->gdmr/(!empty($rvc[0]->gdmr)?$rvc[0]->gdmr:1)))*100 ;
+        $rvclw[0]->gdj = (1 -($rvclw[0]->gdj/(!empty($rvc[0]->gdj)?$rvc[0]->gdj:1)))*100 ;
+        $rvclw[0]->gdv = (1 -($rvclw[0]->gdv/(!empty($rvc[0]->gdv)?$rvc[0]->gdv:1)))*100 ;
+        $rvclw[0]->gds = (1 -($rvclw[0]->gds/(!empty($rvc[0]->gds)?$rvc[0]->gds:1)))*100 ;
+        $rvclw[0]->gdd = (1 -($rvclw[0]->gdd/(!empty($rvc[0]->gdd)?$rvc[0]->gdd:1)))*100 ;
+        $rvclw[0]->gnl = (1 -($rvclw[0]->gnl/(!empty($rvc[0]->gnl)?$rvc[0]->gnl:1)))*100 ;
+        $rvclw[0]->gnm = (1 -($rvclw[0]->gnm/(!empty($rvc[0]->gnm)?$rvc[0]->gnm:1)))*100 ;
+        $rvclw[0]->gnmr = (1 -($rvclw[0]->gnmr/(!empty($rvc[0]->gnmr)?$rvc[0]->gnmr:1)))*100 ;
+        $rvclw[0]->gnj = (1 -($rvclw[0]->gnj/(!empty($rvc[0]->gnj)?$rvc[0]->gnj:1)))*100 ;
+        $rvclw[0]->gnv = (1 -($rvclw[0]->gnv/(!empty($rvc[0]->gnv)?$rvc[0]->gnv:1)))*100 ;
+        $rvclw[0]->gns = (1 -($rvclw[0]->gns/(!empty($rvc[0]->gns)?$rvc[0]->gns:1)))*100 ;
+        $rvclw[0]->gnd = (1 -($rvclw[0]->gnd/(!empty($rvc[0]->gnd)?$rvc[0]->gnd:1)))*100 ;
+        $rvclw[0]->nsbl = (1 -($rvclw[0]->nsbl/(!empty($rvc[0]->nsbl)?$rvc[0]->nsbl:1)))*100 ;
+        $rvclw[0]->nsbm = (1 -($rvclw[0]->nsbm/(!empty($rvc[0]->nsbm)?$rvc[0]->nsbm:1)))*100 ;
+        $rvclw[0]->nsbmr = (1 -($rvclw[0]->nsbmr/(!empty($rvc[0]->nsbmr)?$rvc[0]->nsbmr:1)))*100 ;
+        $rvclw[0]->nsbj = (1 -($rvclw[0]->nsbj/(!empty($rvc[0]->nsbj)?$rvc[0]->nsbj:1)))*100 ;
+        $rvclw[0]->nsbv = (1 -($rvclw[0]->nsbv/(!empty($rvc[0]->nsbv)?$rvc[0]->nsbv:1)))*100 ;
+        $rvclw[0]->nsbs = (1 -($rvclw[0]->nsbs/(!empty($rvc[0]->nsbs)?$rvc[0]->nsbs:1)))*100 ;
+        $rvclw[0]->nsbd = (1 -($rvclw[0]->nsbd/(!empty($rvc[0]->nsbd)?$rvc[0]->nsbd:1)))*100 ;
+        $rvclw[0]->nsll = (1 -($rvclw[0]->nsll/(!empty($rvc[0]->nsll)?$rvc[0]->nsll:1)))*100 ;
+        $rvclw[0]->nslm = (1 -($rvclw[0]->nslm/(!empty($rvc[0]->nslm)?$rvc[0]->nslm:1)))*100 ;
+        $rvclw[0]->nslmr = (1 -($rvclw[0]->nslmr/(!empty($rvc[0]->nslmr)?$rvc[0]->nslmr:1)))*100 ;
+        $rvclw[0]->nslj = (1 -($rvclw[0]->nslj/(!empty($rvc[0]->nslj)?$rvc[0]->nslj:1)))*100 ;
+        $rvclw[0]->nslv = (1 -($rvclw[0]->nslv/(!empty($rvc[0]->nslv)?$rvc[0]->nslv:1)))*100 ;
+        $rvclw[0]->nsls = (1 -($rvclw[0]->nsls/(!empty($rvc[0]->nsls)?$rvc[0]->nsls:1)))*100 ;
+        $rvclw[0]->nsld = (1 -($rvclw[0]->nsld/(!empty($rvc[0]->nsld)?$rvc[0]->nsld:1)))*100 ;
+        $rvclw[0]->nsdl = (1 -($rvclw[0]->nsdl/(!empty($rvc[0]->nsdl)?$rvc[0]->nsdl:1)))*100 ;
+        $rvclw[0]->nsdm = (1 -($rvclw[0]->nsdm/(!empty($rvc[0]->nsdm)?$rvc[0]->nsdm:1)))*100 ;
+        $rvclw[0]->nsdmr = (1 -($rvclw[0]->nsdmr/(!empty($rvc[0]->nsdmr)?$rvc[0]->nsdmr:1)))*100 ;
+        $rvclw[0]->nsdj = (1 -($rvclw[0]->nsdj/(!empty($rvc[0]->nsdj)?$rvc[0]->nsdj:1)))*100 ;
+        $rvclw[0]->nsdv = (1 -($rvclw[0]->nsdv/(!empty($rvc[0]->nsdv)?$rvc[0]->nsdv:1)))*100 ;
+        $rvclw[0]->nsds = (1 -($rvclw[0]->nsds/(!empty($rvc[0]->nsds)?$rvc[0]->nsds:1)))*100 ;
+        $rvclw[0]->nsdd = (1 -($rvclw[0]->nsdd/(!empty($rvc[0]->nsdd)?$rvc[0]->nsdd:1)))*100 ;
+        $rvclw[0]->nsnl = (1 -($rvclw[0]->nsnl/(!empty($rvc[0]->nsnl)?$rvc[0]->nsnl:1)))*100 ;
+        $rvclw[0]->nsnm = (1 -($rvclw[0]->nsnm/(!empty($rvc[0]->nsnm)?$rvc[0]->nsnm:1)))*100 ;
+        $rvclw[0]->nsnmr = (1 -($rvclw[0]->nsnmr/(!empty($rvc[0]->nsnmr)?$rvc[0]->nsnmr:1)))*100 ;
+        $rvclw[0]->nsnj = (1 -($rvclw[0]->nsnj/(!empty($rvc[0]->nsnj)?$rvc[0]->nsnj:1)))*100 ;
+        $rvclw[0]->nsnv = (1 -($rvclw[0]->nsnv/(!empty($rvc[0]->nsnv)?$rvc[0]->nsnv:1)))*100 ;
+        $rvclw[0]->nsns = (1 -($rvclw[0]->nsns/(!empty($rvc[0]->nsns)?$rvc[0]->nsns:1)))*100 ;
+        $rvclw[0]->nsnd = (1 -($rvclw[0]->nsnd/(!empty($rvc[0]->nsnd)?$rvc[0]->nsnd:1)))*100 ;
+        $rvclw[0]->avgbl = (1 -($rvclw[0]->avgbl/(!empty($rvc[0]->avgbl)?$rvc[0]->avgbl:1)))*100 ;
+        $rvclw[0]->avgbm = (1 -($rvclw[0]->avgbm/(!empty($rvc[0]->avgbm)?$rvc[0]->avgbm:1)))*100 ;
+        $rvclw[0]->avgbmr = (1 -($rvclw[0]->avgbmr/(!empty($rvc[0]->avgbmr)?$rvc[0]->avgbmr:1)))*100 ;
+        $rvclw[0]->avgbj = (1 -($rvclw[0]->avgbj/(!empty($rvc[0]->avgbj)?$rvc[0]->avgbj:1)))*100 ;
+        $rvclw[0]->avgbv = (1 -($rvclw[0]->avgbv/(!empty($rvc[0]->avgbv)?$rvc[0]->avgbv:1)))*100 ;
+        $rvclw[0]->avgbs = (1 -($rvclw[0]->avgbs/(!empty($rvc[0]->avgbs)?$rvc[0]->avgbs:1)))*100 ;
+        $rvclw[0]->avgbd = (1 -($rvclw[0]->avgbd/(!empty($rvc[0]->avgbd)?$rvc[0]->avgbd:1)))*100 ;
+        $rvclw[0]->avgll = (1 -($rvclw[0]->avgll/(!empty($rvc[0]->avgll)?$rvc[0]->avgll:1)))*100 ;
+        $rvclw[0]->avglm = (1 -($rvclw[0]->avglm/(!empty($rvc[0]->avglm)?$rvc[0]->avglm:1)))*100 ;
+        $rvclw[0]->avglmr = (1 -($rvclw[0]->avglmr/(!empty($rvc[0]->avglmr)?$rvc[0]->avglmr:1)))*100 ;
+        $rvclw[0]->avglj = (1 -($rvclw[0]->avglj/(!empty($rvc[0]->avglj)?$rvc[0]->avglj:1)))*100 ;
+        $rvclw[0]->avglv = (1 -($rvclw[0]->avglv/(!empty($rvc[0]->avglv)?$rvc[0]->avglv:1)))*100 ;
+        $rvclw[0]->avgls = (1 -($rvclw[0]->avgls/(!empty($rvc[0]->avgls)?$rvc[0]->avgls:1)))*100 ;
+        $rvclw[0]->avgld = (1 -($rvclw[0]->avgld/(!empty($rvc[0]->avgld)?$rvc[0]->avgld:1)))*100 ;
+        $rvclw[0]->avgdl = (1 -($rvclw[0]->avgdl/(!empty($rvc[0]->avgdl)?$rvc[0]->avgdl:1)))*100 ;
+        $rvclw[0]->avgdm = (1 -($rvclw[0]->avgdm/(!empty($rvc[0]->avgdm)?$rvc[0]->avgdm:1)))*100 ;
+        $rvclw[0]->avgdmr = (1 -($rvclw[0]->avgdmr/(!empty($rvc[0]->avgdmr)?$rvc[0]->avgdmr:1)))*100 ;
+        $rvclw[0]->avgdj = (1 -($rvclw[0]->avgdj/(!empty($rvc[0]->avgdj)?$rvc[0]->avgdj:1)))*100 ;
+        $rvclw[0]->avgdv = (1 -($rvclw[0]->avgdv/(!empty($rvc[0]->avgdv)?$rvc[0]->avgdv:1)))*100 ;
+        $rvclw[0]->avgds = (1 -($rvclw[0]->avgds/(!empty($rvc[0]->avgds)?$rvc[0]->avgds:1)))*100 ;
+        $rvclw[0]->avgdd = (1 -($rvclw[0]->avgdd/(!empty($rvc[0]->avgdd)?$rvc[0]->avgdd:1)))*100 ;
+        $rvclw[0]->avgnl = (1 -($rvclw[0]->avgnl/(!empty($rvc[0]->avgnl)?$rvc[0]->avgnl:1)))*100 ;
+        $rvclw[0]->avgnm = (1 -($rvclw[0]->avgnm/(!empty($rvc[0]->avgnm)?$rvc[0]->avgnm:1)))*100 ;
+        $rvclw[0]->avgnmr = (1 -($rvclw[0]->avgnmr/(!empty($rvc[0]->avgnmr)?$rvc[0]->avgnmr:1)))*100 ;
+        $rvclw[0]->avgnj = (1 -($rvclw[0]->avgnj/(!empty($rvc[0]->avgnj)?$rvc[0]->avgnj:1)))*100 ;
+        $rvclw[0]->avgnv = (1 -($rvclw[0]->avgnv/(!empty($rvc[0]->avgnv)?$rvc[0]->avgnv:1)))*100 ;
+        $rvclw[0]->avgns = (1 -($rvclw[0]->avgns/(!empty($rvc[0]->avgns)?$rvc[0]->avgns:1)))*100 ;
+        $rvclw[0]->avgnd = (1 -($rvclw[0]->avgnd/(!empty($rvc[0]->avgnd)?$rvc[0]->avgnd:1)))*100 ;
+
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->setActiveSheetIndex(0);
+        $currentSheet = $spreadsheet->getActiveSheet();
+        $spreadsheet->getDefaultStyle()->getFont()->setSize(11);
+
+        $spreadsheet->getActiveSheet()->getColumnDimension('A')->setWidth(13);
+        $spreadsheet->getActiveSheet()->getColumnDimension('B')->setWidth(20);
+        $spreadsheet->getActiveSheet()->getColumnDimension('C')->setWidth(12);
+        $spreadsheet->getActiveSheet()->getColumnDimension('D')->setWidth(12);
+        $spreadsheet->getActiveSheet()->getColumnDimension('E')->setWidth(12);
+        $spreadsheet->getActiveSheet()->getColumnDimension('F')->setWidth(12);
+
+        $currentSheet->mergeCells('B2:D2');
+        $currentSheet->mergeCells('B3:D3');
+        $currentSheet->mergeCells('B4:D4');
+        $currentSheet->mergeCells('B5:D5');
+        $currentSheet->mergeCells('B6:D6');
+
+        $spreadsheet->getActiveSheet()->getStyle('A2:A6')->getFill()
+        ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+        ->getStartColor()->setARGB('ffe3e3e3');
+
+        $spreadsheet->getActiveSheet()->getStyle('A2:A5')
+            ->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+
+        $spreadsheet->getActiveSheet()->getStyle('A2:D6')->getBorders()->applyFromArray( [ 'allBorders' => [ 'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN ] ] );    
+        
+        $spreadsheet->getActiveSheet()->getStyle('A8:Q9')->getFill()
+        ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+        ->getStartColor()->setARGB('ffe3e3e3');
+
+        $currentSheet->setCellValue('A2', 'Report');
+        $currentSheet->setCellValue('A3', 'Day Part');
+        $currentSheet->setCellValue('A4', 'Day Part LW');
+        $currentSheet->setCellValue('A5', 'Location');
+        $currentSheet->setCellValue('A6', 'Export Date');
+    
+        $currentSheet->setCellValue('B2', 'Daypart VIT');
+        $currentSheet->setCellValue('B3', $this->initDate . " - " . $this->endDate);
+        $currentSheet->setCellValue('B4', $this->initDateLw . " - " . $this->endDateLw);
+        $currentSheet->setCellValue('B5', strtoupper($this->location));
+        $currentSheet->setCellValue('B6', date("Y-m-d"));
+
+        $currentSheet->setCellValue('A8', 'Guests');
+        $currentSheet->setCellValue('A9', 'Daypart');
+        $currentSheet->setCellValue('B9', 'Tienda');
+        $currentSheet->setCellValue('C9', 'Lunes');
+        $currentSheet->setCellValue('D9', '% LW');
+        $currentSheet->setCellValue('E9', 'Martes');
+        $currentSheet->setCellValue('F9', '% LW');
+        $currentSheet->setCellValue('G9', 'Miercoles');
+        $currentSheet->setCellValue('H9', '% LW');
+        $currentSheet->setCellValue('I9', 'Jueves');
+        $currentSheet->setCellValue('J9', '% LW');
+        $currentSheet->setCellValue('K9', 'Viernes');
+        $currentSheet->setCellValue('L9', '% LW');
+        $currentSheet->setCellValue('M9', 'Sabado');
+        $currentSheet->setCellValue('N9', '% LW');
+        $currentSheet->setCellValue('O9', 'Domingo');
+        $currentSheet->setCellValue('P9', '% LW');
+        $currentSheet->setCellValue('Q9', '$ DIF LW');
+        
+
+        $row = 10;
+        $startRowFormat=$row;
+        if(!empty($rvc[0]))
+        {
+            $currentSheet->setCellValue('A'.$row, "Breakfast");
+            $currentSheet->setCellValue('B'.$row, $this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->gbl);
+            $currentSheet->setCellValue('D'.$row, $rvclw[0]->gbl);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->gbm);
+            $currentSheet->setCellValue('F'.$row, $rvclw[0]->gbm);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->gbmr);
+            $currentSheet->setCellValue('H'.$row, $rvclw[0]->gbmr);
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->gbj);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->gbj);
+            $currentSheet->setCellValue('K'.$row, $rvc[0]->gbv);
+            $currentSheet->setCellValue('L'.$row, $rvclw[0]->gbv);
+            $currentSheet->setCellValue('M'.$row, $rvc[0]->gbs);
+            $currentSheet->setCellValue('N'.$row, $rvclw[0]->gbs);            
+            $currentSheet->setCellValue('O'.$row, $rvc[0]->gbd);
+            $currentSheet->setCellValue('P'.$row, $rvclw[0]->gbd);
+            $currentSheet->setCellValue('Q'.$row, $rvclw[0]->gb);
+            
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Lunch");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->gll);
+            $currentSheet->setCellValue('D'.$row, $rvclw[0]->gll);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->glm);
+            $currentSheet->setCellValue('F'.$row, $rvclw[0]->glm);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->glmr);
+            $currentSheet->setCellValue('H'.$row, $rvclw[0]->glmr);
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->glj);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->glj);
+            $currentSheet->setCellValue('K'.$row, $rvc[0]->glv);
+            $currentSheet->setCellValue('L'.$row, $rvclw[0]->glv);
+            $currentSheet->setCellValue('M'.$row, $rvc[0]->gls);
+            $currentSheet->setCellValue('N'.$row, $rvclw[0]->gls);
+            $currentSheet->setCellValue('O'.$row, $rvc[0]->gld);
+            $currentSheet->setCellValue('P'.$row, $rvclw[0]->gld);
+            $currentSheet->setCellValue('Q'.$row, $rvclw[0]->gl);
+
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Dinner");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->gdl);
+            $currentSheet->setCellValue('D'.$row, $rvclw[0]->gdl);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->gdm);
+            $currentSheet->setCellValue('F'.$row, $rvclw[0]->gdm);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->gdmr);
+            $currentSheet->setCellValue('H'.$row, $rvclw[0]->gdmr);
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->gdj);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->gdj);
+            $currentSheet->setCellValue('K'.$row, $rvc[0]->gdv);
+            $currentSheet->setCellValue('L'.$row, $rvclw[0]->gdv);
+            $currentSheet->setCellValue('M'.$row, $rvc[0]->gds);            
+            $currentSheet->setCellValue('N'.$row, $rvclw[0]->gds);
+            $currentSheet->setCellValue('O'.$row, $rvc[0]->gdd);
+            $currentSheet->setCellValue('P'.$row, $rvclw[0]->gdd);
+            $currentSheet->setCellValue('Q'.$row, $rvclw[0]->gd);
+
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Night");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->gnl);
+            $currentSheet->setCellValue('D'.$row, $rvclw[0]->gnl);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->gnm);
+            $currentSheet->setCellValue('F'.$row, $rvclw[0]->gnm);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->gnmr);
+            $currentSheet->setCellValue('H'.$row, $rvclw[0]->gnmr);
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->gnj);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->gnj);
+            $currentSheet->setCellValue('K'.$row, $rvc[0]->gnv);
+            $currentSheet->setCellValue('L'.$row, $rvclw[0]->gnv);
+            $currentSheet->setCellValue('M'.$row, $rvc[0]->gns);
+            $currentSheet->setCellValue('N'.$row, $rvclw[0]->gns);
+            $currentSheet->setCellValue('O'.$row, $rvc[0]->gnd);
+            $currentSheet->setCellValue('P'.$row, $rvclw[0]->gnd);
+            $currentSheet->setCellValue('Q'.$row, $rvclw[0]->gn);
+            
+            $endRowFormat = $row;
+            
+            $spreadsheet->getActiveSheet()->getStyle('A'.$startRowFormat.':Q'.$endRowFormat)->getBorders()->applyFromArray( [ 'allBorders' => [ 'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN ] ] );
+
+            $row+=2;            
+            $currentSheet->setCellValue('A'.$row, 'NetSales');
+            $row++;
+            $currentSheet->setCellValue('A'.$row, 'Daypart');
+            $currentSheet->setCellValue('B'.$row, 'Tienda');
+            $currentSheet->setCellValue('C'.$row, 'Lunes');
+            $currentSheet->setCellValue('D'.$row, 'Martes');
+            $currentSheet->setCellValue('E'.$row, 'Miercoles');
+            $currentSheet->setCellValue('F'.$row, 'Jueves');
+            $currentSheet->setCellValue('G'.$row, 'Viernes');
+            $currentSheet->setCellValue('H'.$row, 'Sabado');
+            $currentSheet->setCellValue('I'.$row, 'Domingo');
+            $currentSheet->setCellValue('J'.$row, '$ DIF LW');
+            $spreadsheet->getActiveSheet()->getStyle('A'.($row-1).':Q'.$row)->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('ffe3e3e3');
+            $row++;
+            $startRowFormat=$row;
+            $currentSheet->setCellValue('A'.$row, "Breakfast");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->nsbl);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->nsbm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->nsbmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->nsbj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->nsbv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->nsbs);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->nsbd);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->nsb);
+            
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Lunch");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->nsll);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->nslm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->nslmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->nslj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->nslv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->nsls);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->nsld);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->nsl);
+
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Dinner");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->nsdl);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->nsdm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->nsdmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->nsdj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->nsdv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->nsds);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->nsdd);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->nsd);
+
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Night");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->nsnl);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->nsnm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->nsnmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->nsnj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->nsnv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->nsns);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->nsnd);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->nsn);
+            
+            $endRowFormat = $row;
+            
+            $spreadsheet->getActiveSheet()->getStyle('A'.$startRowFormat.':J'.$endRowFormat)->getBorders()->applyFromArray( [ 'allBorders' => [ 'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN ] ] );
+
+            $row+=2;
+            $currentSheet->setCellValue('A'.$row, 'Avg Check');
+            $row++;
+            $currentSheet->setCellValue('A'.$row, 'Daypart');
+            $currentSheet->setCellValue('B'.$row, 'Tienda');
+            $currentSheet->setCellValue('C'.$row, 'Lunes');
+            $currentSheet->setCellValue('D'.$row, 'Martes');
+            $currentSheet->setCellValue('E'.$row, 'Miercoles');
+            $currentSheet->setCellValue('F'.$row, 'Jueves');
+            $currentSheet->setCellValue('G'.$row, 'Viernes');
+            $currentSheet->setCellValue('H'.$row, 'Sabado');
+            $currentSheet->setCellValue('I'.$row, 'Domingo');
+            $currentSheet->setCellValue('J'.$row, '$ DIF LW');
+            $spreadsheet->getActiveSheet()->getStyle('A'.($row-1).':Q'.$row)->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('ffe3e3e3');            
+            $row++;
+            $startRowFormat=$row;
+            $currentSheet->setCellValue('A'.$row, "Breakfast");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->avgbl);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->avgbm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->avgbmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->avgbj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->avgbv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->avgbs);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->avgbd);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->avgb);
+            
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Lunch");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->avgll);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->avglm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->avglmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->avglj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->avglv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->avgls);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->avgld);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->avgl);
+
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Dinner");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->avgdl);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->avgdm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->avgdmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->avgdj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->avgdv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->avgds);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->avgdd);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->avgd);
+
+            $row++;
+            $currentSheet->setCellValue('A'.$row, "Night");
+            $currentSheet->setCellValue('B'.$row,$this->storelabel);
+            $currentSheet->setCellValue('C'.$row, $rvc[0]->avgnl);
+            $currentSheet->setCellValue('D'.$row, $rvc[0]->avgnm);
+            $currentSheet->setCellValue('E'.$row, $rvc[0]->avgnmr);
+            $currentSheet->setCellValue('F'.$row, $rvc[0]->avgnj);
+            $currentSheet->setCellValue('G'.$row, $rvc[0]->avgnv);
+            $currentSheet->setCellValue('H'.$row, $rvc[0]->avgns);            
+            $currentSheet->setCellValue('I'.$row, $rvc[0]->avgnd);
+            $currentSheet->setCellValue('J'.$row, $rvclw[0]->avgn);
+            
+            $endRowFormat = $row;
+            
+            $spreadsheet->getActiveSheet()->getStyle('A'.$startRowFormat.':Q'.$endRowFormat)->getBorders()->applyFromArray( [ 'allBorders' => [ 'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN ] ] );
+        }
+        $writer = IOFactory::createWriter($spreadsheet, "Xlsx");
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="DaypartVIT'.date("Ymd").'.xlsx"');
+        $writer->save("php://output");
+
+    }
+
+}
