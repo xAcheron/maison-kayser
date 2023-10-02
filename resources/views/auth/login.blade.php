@@ -5,7 +5,7 @@
 	<nav class="navbar navbar-expand-lg bg-primary navbar-transparent navbar-absolute" color-on-scroll="500">
 		<div class="container">
 		<div class="navbar-wrapper">
-			  <a class="navbar-brand" href="#">Intranet Prigo</a>
+			  <a class="navbar-brand" href="home">Intranet Prigo</a>
 		</div>
 		<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navigation" aria-controls="navigation-index" aria-expanded="false" aria-label="Toggle navigation">
 		  <span class="sr-only">Toggle navigation</span>
@@ -22,7 +22,7 @@
 
             <div class="container">
                 <div class="col-md-4 col-sm-6 ml-auto mr-auto">
-                    <form method="POST" action="https://intranet.prigo.com.mx/login">
+                    <form method="POST" action="http://127.0.0.1:8000/login">
 						{{ csrf_field() }}
 						<div class="card card-login">
 
@@ -31,7 +31,7 @@
 							</div>
 
 							<div class="card-body ">
-								<p class="card-description text-center">Log in</p>
+								<p class="card-description text-center">Iniciar Sesion</p>
 
 								<span class="bmd-form-group">
 									<div class="input-group">
@@ -40,7 +40,7 @@
 											<i class="material-icons">email</i>
 										</span>
 									  </div>
-										<input type="email"  name="email" autofocus class="form-control" placeholder="Email...">
+										<input type="email"  name="email" autofocus class="form-control" placeholder="Correo Electronico...">
 									@if ($errors->has('email'))
 										<span class="help-block">
 											<strong>{{ $errors->first('email') }}</strong>
@@ -56,7 +56,7 @@
 												<i class="material-icons">lock_outline</i>
 											</span>
 										</div>
-										<input type="password" class="form-control" name="password" required placeholder="Password...">
+										<input type="password" class="form-control" name="password" required placeholder="Contraseña...">
 										@if ($errors->has('password'))
 										<span class="help-block">
 										<strong>{{ $errors->first('password') }}</strong>

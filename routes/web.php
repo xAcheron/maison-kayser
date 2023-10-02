@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuthApiController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PruebaController;
 use App\Http\Controllers\ReportsController;
@@ -19,11 +20,11 @@ use Illuminate\Support\Facades\Route;
 */
 Route::get('home', [HomeController::class, 'index'])->name('home'); 
 Route::get('/', function () {
-    return view('login'); 
+    return view('auth.login'); 
 });
 
-
-
+ 
+Route::post('login', [AuthApiController::class, 'login'])->name('login');
 
 // Todo esto tiene que ver con el controlador de RH. Recuerda moverlo de tal manera que se minimice el codigo.
 Route::get('home', [HomeController::class, 'index'])->name('home'); 
@@ -86,7 +87,7 @@ Route::get('reports/VentaSemProd/', [ReportsController::class, 'VSProdReport'])-
 Route::get('reports/CheckListPrub/', [ReportsController::class, 'CheckListReportPage'])->name('CheckListReportPage');
 Route::get('guests/lastyear', [SalesController::class, 'getLastYearGuest'])->name('getLastYearGuest');
 Route::get('reports/guest/week', [ReportsController::class, 'GuestWeekPage'])->name('GuestWeekPage');
-Route::get('reports/delivery', [ReportsController::class, 'deliveryReport'])->name('deliveryReportPage');
+Route::post('reports/delivery', [ReportsController::class, 'deliveryReport'])->name('deliveryReportPage');
 Route::get('reports/checklist/incidencias', [ReportsController::class, 'CheckListInci'])->name('CheckListInci');
 Route::get('reports/mantenimiento', [ReportsController::class, 'Mantenimiento'])->name('MantoReport');
 Route::get('reports/mantenimiento/holamundo', [ReportsController::class, 'Mantenimiento'])->name('deliveryItemReportPage'); // Este esta mal, pero para que jale
@@ -101,10 +102,10 @@ Route::get('reports/ventas/sucursal', [ReportsController::class, 'VentasSucPage'
 Route::get('inventory/cost', [InventarioController::class, 'costo'])->name('costoVenta');
 Route::get('reports/MenuEngineering/', [ReportsController::class, 'MenuEngineeringReport'])->name('reportsME');
 Route::get('reports/analisis/precio', [ReportsController::class, 'AnalisisPrecioPage'])->name('AnalisisPrecioPage');
-Route::get('venta/get/sucursales', [SalesController::class, 'getSucursales'])->name('getSucursalesVen');
+Route::post('venta/get/sucursales', [SalesController::class, 'getSucursales'])->name('getSucursalesVen');
 Route::get('venta/mes/detalle', [SalesController::class, 'getMensual'])->name('getDetVenta');
-Route::get('venta/mes/detalle/Xls', [SalesController::class, 'getMensualXls'])->name('getDetVentaXls');
-// Route::get('', [::class, ''])->name('');
+Route::post('venta/mes/detalle/Xls', [SalesController::class, 'getMensualXls'])->name('getDetVentaXls');
+Route::any('/reports/get/{id}/{format?}', [ReportsController::class, 'GetReportData'])->name('getReport');
 // Route::get('', [::class, ''])->name('');
 // Route::get('', [::class, ''])->name('');
 // Route::get('', [::class, ''])->name('');

@@ -15,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use App\Classes\Reports\utils\UserLocation;
+
 #use App;
 
 class SalesController extends Controller
@@ -320,7 +321,7 @@ class SalesController extends Controller
         $sucs = DB::select("SELECT sucursales.idSap AS idSucursal, sucursales.nombre FROM sucursales WHERE sucursales.idTipo>0 AND estado = 1 AND NOT(idCategoria IN (10)) ORDER BY idEmpresa, nombre;");
 
         $location = new UserLocation();
-        $hierachy = $location->getHierachy2(); 
+        $hierachy = $location->getHierachy3(); 
         $menu = $this->menuReports();
         //dd($hierachy);
         return view('ventas.index', ['sucursales' => $sucs, 'menu' => $menu, 'hierachy' => $hierachy]);
@@ -344,15 +345,16 @@ class SalesController extends Controller
         $fechaFin = $fecha . "-" . ($days < 10 ? "0" : "") . $days;
 
         $location = new UserLocation();
-        if (session('DASHRole') == 1) {
-            $location->get($locations, $typeLoc);
+        // if (session('DASHRole') == 1) {
+        //     $location->get($locations, $typeLoc);
 
-            // $sucs = DB::select("SELECT sucursales.idSap AS id FROM sucursales WHERE estado = 1 AND sucursales.idTipo>0 AND NOT(idCategoria IN (10)) " . (empty($compania) ? "" : " AND idEmpresa = $compania") . ";");
-        } else {
-            // $sucs = DB::select("SELECT sucursales.idSap AS id FROM sucursales WHERE sucursales.idTipo>0 AND id IN (" . session('sucursales') . ") AND estado = 1 AND NOT(idCategoria IN (10)) " . (empty($compania) ? "" : " AND idEmpresa = $compania") . ";");
-            $location->get($locations, $typeLoc);
-        }
+        //     // $sucs = DB::select("SELECT sucursales.idSap AS id FROM sucursales WHERE estado = 1 AND sucursales.idTipo>0 AND NOT(idCategoria IN (10)) " . (empty($compania) ? "" : " AND idEmpresa = $compania") . ";");
+        // } else {
+        //     // $sucs = DB::select("SELECT sucursales.idSap AS id FROM sucursales WHERE sucursales.idTipo>0 AND id IN (" . session('sucursales') . ") AND estado = 1 AND NOT(idCategoria IN (10)) " . (empty($compania) ? "" : " AND idEmpresa = $compania") . ";");
+        //     $location->get($locations, $typeLoc);
+        // }
 
+        $location->get($locations, $typeLoc);
         $sucs = $location->locationSap;
         $sucsId = $location->locationID;
         $compania = $location->company == 'All' ? 0 : $location->company;
@@ -452,136 +454,136 @@ class SalesController extends Controller
         ]);
     }
 
-    // public function getMensualXls(Request $request)
-    // {
-    //     $fecha = !empty($request->input('fechaIni')) ? $request->input('fechaIni') : date("Y-m");
+    public function getMensualXls(Request $request)
+    {
+        $fecha = !empty($request->input('fechaIni')) ? $request->input('fechaIni') : date("Y-m");
 
-    //     $tmpMY = explode("-", $fecha);
+        $tmpMY = explode("-", $fecha);
 
-    //     $days = cal_days_in_month(CAL_GREGORIAN, $tmpMY[1], $tmpMY[0]);
+        $days = cal_days_in_month(CAL_GREGORIAN, $tmpMY[1], $tmpMY[0]);
 
-    //     $fechaInicio = $fecha . "-01";
-    //     $fechaFin = $fecha . "-" . ($days < 10 ? "0" : "") . $days;
+        $fechaInicio = $fecha . "-01";
+        $fechaFin = $fecha . "-" . ($days < 10 ? "0" : "") . $days;
 
-    //     if (session('DASHRole') == 1) {
-    //         $sucs = DB::select("SELECT sucursales.idSap AS id, nombre FROM sucursales WHERE estado = 1 AND NOT(idCategoria IN (10)) ORDER BY sucursales.nombre;");
-    //     } else {
-    //         $sucs = DB::select("SELECT sucursales.idSap AS id, nombre FROM sucursales WHERE id IN (" . session('sucursales') . ") AND estado = 1 AND NOT(idCategoria IN (10)) ORDER BY sucursales.nombre;");
-    //     }
+        if (session('DASHRole') == 1) {
+            $sucs = DB::select("SELECT sucursales.idSap AS id, nombre FROM sucursales WHERE estado = 1 AND NOT(idCategoria IN (10)) ORDER BY sucursales.nombre;");
+        } else {
+            $sucs = DB::select("SELECT sucursales.idSap AS id, nombre FROM sucursales WHERE id IN (" . session('sucursales') . ") AND estado = 1 AND NOT(idCategoria IN (10)) ORDER BY sucursales.nombre;");
+        }
 
-    //     $emptySuc = array();
+        $emptySuc = array();
 
-    //     $ventadet = array();
+        $ventadet = array();
 
-    //     $emptySuc["fecha"] = "";
+        $emptySuc["fecha"] = "";
 
-    //     foreach ($sucs as $suc) {
-    //         $emptySuc[$suc->id] = 0;
-    //     }
+        foreach ($sucs as $suc) {
+            $emptySuc[$suc->id] = 0;
+        }
 
-    //     $emptySuc["diario"] = 0;
-    //     $emptySuc["semana"] = 0;
+        $emptySuc["diario"] = 0;
+        $emptySuc["semana"] = 0;
 
-    //     $sql = "SELECT fecha, s.idSap, netSales FROM venta_diaria_sucursal dia INNER JOIN sucursales AS s ON s.id = dia.idSucursal WHERE s.estado = 1 AND  fecha BETWEEN '$fechaInicio' AND '$fechaFin' ORDER BY fecha, s.nombre;";
+        $sql = "SELECT fecha, s.idSap, netSales FROM venta_diaria_sucursal dia INNER JOIN sucursales AS s ON s.id = dia.idSucursal WHERE s.estado = 1 AND  fecha BETWEEN '$fechaInicio' AND '$fechaFin' ORDER BY fecha, s.nombre;";
 
-    //     $venta = DB::select($sql);
+        $venta = DB::select($sql);
 
-    //     $mes = array();
+        $mes = array();
 
-    //     $fecha = "";
-    //     $totalDia = 0;
-    //     $totalSemana = 0;
+        $fecha = "";
+        $totalDia = 0;
+        $totalSemana = 0;
 
-    //     $diaArr = $emptySuc;
-    //     $TotArr = $emptySuc;
-    //     $TotArr["fecha"] = "Total";
-    //     foreach ($venta as $dia) {
+        $diaArr = $emptySuc;
+        $TotArr = $emptySuc;
+        $TotArr["fecha"] = "Total";
+        foreach ($venta as $dia) {
 
-    //         if ($fecha == "") {
-    //             $diaArr = $emptySuc;
-    //             $diaArr["fecha"] = $dia->fecha;
-    //             $fecha = $dia->fecha;
-    //         }
+            if ($fecha == "") {
+                $diaArr = $emptySuc;
+                $diaArr["fecha"] = $dia->fecha;
+                $fecha = $dia->fecha;
+            }
 
-    //         if ($fecha != $dia->fecha) {
+            if ($fecha != $dia->fecha) {
 
-    //             $diaArr["diario"] = $totalDia;
+                $diaArr["diario"] = $totalDia;
 
-    //             if (date("w", strtotime($fecha)) == 0) {
-    //                 $diaArr["semana"] = $totalSemana;
-    //                 $totalSemana =  0;
-    //             } else {
-    //                 $diaArr["semana"] = "";
-    //             }
+                if (date("w", strtotime($fecha)) == 0) {
+                    $diaArr["semana"] = $totalSemana;
+                    $totalSemana =  0;
+                } else {
+                    $diaArr["semana"] = "";
+                }
 
-    //             $ventadet[] = $diaArr;
-    //             $diaArr = $emptySuc;
-    //             $totalDia = 0;
-    //             $diaArr["fecha"] = $dia->fecha;
-    //         }
+                $ventadet[] = $diaArr;
+                $diaArr = $emptySuc;
+                $totalDia = 0;
+                $diaArr["fecha"] = $dia->fecha;
+            }
 
-    //         $fecha = $dia->fecha;
+            $fecha = $dia->fecha;
 
-    //         $diaArr[$dia->idSap] = $dia->netSales;
-    //         $TotArr[$dia->idSap] += $dia->netSales;
-    //         $totalDia += $dia->netSales;
-    //         $totalSemana += $dia->netSales;
+            $diaArr[$dia->idSap] = $dia->netSales;
+            $TotArr[$dia->idSap] += $dia->netSales;
+            $totalDia += $dia->netSales;
+            $totalSemana += $dia->netSales;
 
-    //         $TotArr["diario"] += $dia->netSales;
-    //         $TotArr["semana"] += $dia->netSales;
-    //     }
+            $TotArr["diario"] += $dia->netSales;
+            $TotArr["semana"] += $dia->netSales;
+        }
 
-    //     $diaArr["diario"] = $totalDia;
-    //     $diaArr["semana"] = $totalSemana;
-    //     $totalSemana =  0;
-    //     $totalDia = 0;
+        $diaArr["diario"] = $totalDia;
+        $diaArr["semana"] = $totalSemana;
+        $totalSemana =  0;
+        $totalDia = 0;
 
-    //     $ventadet[] = $diaArr;
+        $ventadet[] = $diaArr;
 
-    //     $diaArr = $emptySuc;
+        $diaArr = $emptySuc;
 
-    //     $ventadet[] = $TotArr;
+        $ventadet[] = $TotArr;
 
-    //     $TotArr = $emptySuc;
+        $TotArr = $emptySuc;
 
-    //     $spreadsheet = new Spreadsheet();
-    //     $sugestedItems = $spreadsheet->getActiveSheet();
-    //     $sugestedItems->setTitle('Concentrado');
+        $spreadsheet = new Spreadsheet();
+        $sugestedItems = $spreadsheet->getActiveSheet();
+        $sugestedItems->setTitle('Concentrado');
 
-    //     $sugestedItems->setCellValueByColumnAndRow(1, 1, 'Fecha');
+        $sugestedItems->setCellValueByColumnAndRow(1, 1, 'Fecha');
 
-    //     $col = 2;
+        $col = 2;
 
-    //     foreach ($sucs as $suc) {
+        foreach ($sucs as $suc) {
 
-    //         $sugestedItems->setCellValueByColumnAndRow($col, 1, $suc->nombre);
+            $sugestedItems->setCellValueByColumnAndRow($col, 1, $suc->nombre);
 
-    //         $col++;
-    //     }
+            $col++;
+        }
 
-    //     $sugestedItems->setCellValueByColumnAndRow($col, 1, "Diario");
-    //     $col++;
-    //     $sugestedItems->setCellValueByColumnAndRow($col, 1, "Semanal");
-    //     $col++;
+        $sugestedItems->setCellValueByColumnAndRow($col, 1, "Diario");
+        $col++;
+        $sugestedItems->setCellValueByColumnAndRow($col, 1, "Semanal");
+        $col++;
 
-    //     $col = 1;
-    //     $row = 2;
-    //     foreach ($ventadet as $detalle) {
-    //         $col = 1;
-    //         #$sugestedItems->setCellValueByColumnAndRow($col,$row, $detalle->fecha);
-    //         #$col++;
-    //         foreach ($detalle as $rw) {
-    //             $sugestedItems->setCellValueByColumnAndRow($col, $row, $rw);
-    //             $col++;
-    //         }
-    //         $row++;
-    //     }
+        $col = 1;
+        $row = 2;
+        foreach ($ventadet as $detalle) {
+            $col = 1;
+            #$sugestedItems->setCellValueByColumnAndRow($col,$row, $detalle->fecha);
+            #$col++;
+            foreach ($detalle as $rw) {
+                $sugestedItems->setCellValueByColumnAndRow($col, $row, $rw);
+                $col++;
+            }
+            $row++;
+        }
 
-    //     $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, "Xlsx");
-    //     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    //     header('Content-Disposition: attachment; filename="VENTA_' . $fecha . '.xlsx"');
-    //     $writer->save("php://output");
-    // }
+        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, "Xlsx");
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="VENTA_' . $fecha . '.xlsx"');
+        $writer->save("php://output");
+    }
 
     public function getLastYearXls(Request $request)
     {
@@ -1209,7 +1211,7 @@ class SalesController extends Controller
         $ventas = array();
 
         $location = new UserLocation();
-        $empresasUsuario = $location->getHierachy2(1);
+        $empresasUsuario = $location->getHierachy3(1);
 
         $compania = empty($request->input('compania')) ? 0 : $request->input('compania');
 

@@ -6,7 +6,7 @@
             <div class="card">
                 <div class="card-body">
                     <div class="row">
-                        <label class="col-1 col-form-label">Fecha Jaja</label>
+                        <label class="col-1 col-form-label">Fecha</label>
                         <div class="col-2">
                             <div class="form-group">
                                 <div class='input-group date'>
@@ -30,7 +30,7 @@
                                 <option value="4">Maison Kayser España</option>
                             </select>
                         </div> --}}
-                        <label for="" class="col-1 col-form-label">La Compañia</label>
+                        <label for="" class="col-1 col-form-label">Compañia</label>
                         <div class="col-3">
                             <select class="select2-item" id="compania" name="compania[]" data-size="7" style="width:100%;"
                                 title="Location" multiple>

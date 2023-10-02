@@ -14,7 +14,7 @@ class UserLocation
     public $locationNombres;
     public $company;
 
-    public function get($location = 0, $type = 0, $idUsuario = 0)
+    public function get($location = 0, $type = 0, $idUsuario = 1)
     {
 
         $this->parentLocation = $location;
@@ -128,7 +128,7 @@ class UserLocation
             foreach ($empresas as $empresa)
                 $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1);
         }
-
+        
         return $hierachy;
     }
 
@@ -178,7 +178,59 @@ class UserLocation
             foreach ($empresas as $empresa)
                 $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1, 'clas' => 'E   ');
         }
+        //dd($hierachy);
+        return $hierachy;
+    }
 
+    public function getHierachy3($onlyCompanies = 0)
+    {
+        $sql = "SELECT empresas.* FROM dashboard_empresa_usuario INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE idUsuario = ?;";
+        //$empresas = DB::select($sql, [Auth::id()]);
+        $empresas = DB::select($sql, [1]);
+        $hierachy = array();
+
+        if ($onlyCompanies == 0) {
+            foreach ($empresas as $empresa) {
+                if (session('RepRole') == 1)
+                    $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1, 'clas' => 'E');
+                $sql = "SELECT  * FROM sucursales_tier WHERE idEmpresa = $empresa->idEmpresa AND estado = 1;";
+                $tiers = DB::select($sql);
+                foreach ($tiers as $key => $tier) {                    
+                    $hierachy[] = array("id" => $tier->idTier, "nombre" => $tier->tier, "tipo" => 1, 'clas' => 'C');
+                    //dd($hierachy, 'aver');
+                    if (session('RepRole') > 1)
+                        $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND id IN (" . session('sucursales') . ") AND estado = 1 AND idTipo > 0 AND idTier = ? ORDER BY nombre;";
+                    else
+                        $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND estado = 1 AND idTipo > 0 AND idTier = ? ORDER BY nombre;";
+                    $sucursales = DB::select($sql, [$empresa->idEmpresa, $tier->idTier]);
+
+                    foreach ($sucursales as $sucursal) {
+                        $hierachy[] = array("id" => $sucursal->id, "nombre" => $sucursal->nombre, "tipo" => 2, 'clas' => 'S');
+                    }
+                }
+
+
+
+                if (session('RepRole') > 1)
+                    $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND id IN (" . session('sucursales') . ") AND estado = 1 AND idTipo > 0 AND idTier = ? ORDER BY nombre;";
+                else
+                    $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND estado = 1 AND idTipo > 0 AND idTier = ? ORDER BY nombre;";
+                $sucursales = DB::select($sql, [$empresa->idEmpresa, 0]);
+
+                if (!empty($sucursales)) {
+                    $hierachy[] = array("id" => 0, "nombre" => 'Sin Categoria', "tipo" => 1, 'clas' => 'SC');
+                }
+
+                foreach ($sucursales as $sucursal) {
+                    $hierachy[] = array("id" => $sucursal->id, "nombre" => $sucursal->nombre, "tipo" => 2, 'clas' => 'S');
+                }
+            }
+        } else {
+            foreach ($empresas as $empresa)
+                $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1, 'clas' => 'E   ');
+                dd($hierachy, 'caso 2');
+        }
+        //dd($hierachy);
         return $hierachy;
     }
 }

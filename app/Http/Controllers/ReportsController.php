@@ -154,23 +154,23 @@ class ReportsController extends Controller
     //     return view('reports.Mantenimiento', ['hierachy' => $hierachy, 'menu' => $menu, 'tecnicos' => $tecnicos]);
     // }
 
-    // public function BudgetReport()
-    // {
-    //     $menu = $this->menuReports();
-    //     $location = new UserLocation();
-    //     $hierachy = json_decode(json_encode($location->getHierachy2()));
-    //     // $hierachy = json_decode(json_encode($this->getHierachy()));
-    //     $meses = json_decode(json_encode($this->getMeses()));
-    //     /*
-    //     $budget = new Budget(22,"2022-08-01");
-    //     $sucs = [27, 4, 22, 1, 3, 39, 8, 25, 68, 28, 2, 21, 60, 20, 5, 26, 6, 16, 55, 7, 9, 10, 11, 12, 32, 18, 33, 13, 67, 14, 15];
-    //     foreach($sucs AS $suc) {
-    //         $budget->setLocation($suc);
-    //         $budget->redistributeBuget();
-    //     }
-    //     */
-    //     return view('reports.Budget', ["hierachy" => $hierachy, "meses" => $meses, 'menu' => $menu]);
-    // }
+    public function BudgetReport()
+    {
+        $menu = $this->menuReports();
+        $location = new UserLocation();
+        $hierachy = json_decode(json_encode($location->getHierachy2()));
+        // $hierachy = json_decode(json_encode($this->getHierachy()));
+        $meses = json_decode(json_encode($this->getMeses()));
+        /*
+        $budget = new Budget(22,"2022-08-01");
+        $sucs = [27, 4, 22, 1, 3, 39, 8, 25, 68, 28, 2, 21, 60, 20, 5, 26, 6, 16, 55, 7, 9, 10, 11, 12, 32, 18, 33, 13, 67, 14, 15];
+        foreach($sucs AS $suc) {
+            $budget->setLocation($suc);
+            $budget->redistributeBuget(); 
+        }
+        */
+        return view('reports.Budget', ["hierachy" => $hierachy, "meses" => $meses, 'menu' => $menu]);
+    }
 
     // public function CheckListReport(Request $request)
     // {
@@ -301,13 +301,13 @@ class ReportsController extends Controller
     //     return view('reports.SettingsIndex', []);
     // }
 
-    // public function getMeses()
-    // {
-    //     return array(
-    //         array("mes" => "Enero 2023", "id" => "2023-01-01"), array("mes" => "Febrero 2023", "id" => "2023-02-01"), array("mes" => "Marzo 2023", "id" => "2023-03-01"), array("mes" => "Abril 2023", "id" => "2023-04-01"), array("mes" => "Mayo 2023", "id" => "2023-05-01"), array("mes" => "Junio 2023", "id" => "2023-06-01"), array("mes" => "Julio 2023", "id" => "2023-07-01"), array("mes" => "Agosto 2023", "id" => "2023-08-01"), array("mes" => "Septiembre 2023", "id" => "2023-09-01"), array("mes" => "Octubre 2023", "id" => "2023-10-01"), array("mes" => "Noviembre 2023", "id" => "2023-11-01"), array("mes" => "Diciembre 2023", "id" => "2023-12-01"), array("mes" => "Agosto 2022", "id" => "2022-08-01"), array("mes" => "Septiembre 2022", "id" => "2022-09-01"), array("mes" => "Octubre 2022", "id" => "2022-10-01"), array("mes" => "Noviembre 2022", "id" => "2022-11-01"), array("mes" => "Diciembre 2022", "id" => "2022-12-01")
+    public function getMeses()
+    {
+        return array(
+            array("mes" => "Enero 2023", "id" => "2023-01-01"), array("mes" => "Febrero 2023", "id" => "2023-02-01"), array("mes" => "Marzo 2023", "id" => "2023-03-01"), array("mes" => "Abril 2023", "id" => "2023-04-01"), array("mes" => "Mayo 2023", "id" => "2023-05-01"), array("mes" => "Junio 2023", "id" => "2023-06-01"), array("mes" => "Julio 2023", "id" => "2023-07-01"), array("mes" => "Agosto 2023", "id" => "2023-08-01"), array("mes" => "Septiembre 2023", "id" => "2023-09-01"), array("mes" => "Octubre 2023", "id" => "2023-10-01"), array("mes" => "Noviembre 2023", "id" => "2023-11-01"), array("mes" => "Diciembre 2023", "id" => "2023-12-01"), array("mes" => "Agosto 2022", "id" => "2022-08-01"), array("mes" => "Septiembre 2022", "id" => "2022-09-01"), array("mes" => "Octubre 2022", "id" => "2022-10-01"), array("mes" => "Noviembre 2022", "id" => "2022-11-01"), array("mes" => "Diciembre 2022", "id" => "2022-12-01")
 
-    //     );
-    // }
+        );
+    }
 
     // public function getHierachy()
     // {
