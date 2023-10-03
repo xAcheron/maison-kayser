@@ -23,10 +23,9 @@ Route::get('/', function () {
     return view('auth.login'); 
 });
 
- 
-Route::post('login', [AuthApiController::class, 'login'])->name('login');
-
 // Todo esto tiene que ver con el controlador de RH. Recuerda moverlo de tal manera que se minimice el codigo.
+Route::post('login', [AuthApiController::class, 'login'])->name('login');
+Route::get('logout', [AuthApiController::class, 'logout'])->name('logout');
 Route::get('home', [HomeController::class, 'index'])->name('home'); 
 Route::get('prueba', [PruebaController::class, 'index'])->name('prueba'); 
 Route::get('vacantes', [RHVacanteController::class, 'index'])->name('vacantes');
@@ -106,9 +105,9 @@ Route::post('venta/get/sucursales', [SalesController::class, 'getSucursales'])->
 Route::get('venta/mes/detalle', [SalesController::class, 'getMensual'])->name('getDetVenta');
 Route::post('venta/mes/detalle/Xls', [SalesController::class, 'getMensualXls'])->name('getDetVentaXls');
 Route::any('/reports/get/{id}/{format?}', [ReportsController::class, 'GetReportData'])->name('getReport');
-// Route::get('', [::class, ''])->name('');
-// Route::get('', [::class, ''])->name('');
-// Route::get('', [::class, ''])->name('');
+Route::get('reports/CheckListPrub/evaluaciones', [CheckListController::class, 'getListEvaluacionesWeb'])->name('getListEvaluacionesWeb');
+Route::get('reports/CheckListPrub/data', [CheckListController::class, 'reporteChecklistWeb'])->name('reporteChecklistWeb');
+Route::get('reports/CheckListPrub/visualizar/{id}', [CheckListController::class, 'visualizarChecklist'])->name('visualizarChecklist');
 // Route::get('', [::class, ''])->name('');
 // Route::get('', [::class, ''])->name('');
 // Route::get('', [::class, ''])->name('');

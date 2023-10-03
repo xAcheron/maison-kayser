@@ -119,13 +119,13 @@ class ReportsController extends Controller
     //     return view('reports.SlTxTp', ['menu' => $menu]);
     // }
 
-    // public function CheckListReportPage()
-    // {
-    //     $menu = $this->menuReports();
-    //     $hierachy = json_decode(json_encode($this->getHierachy()));
-    //     $years = DB::select('SELECT YEAR(fechaGenerada) as year FROM checklist_generados GROUP BY YEAR(fechaGenerada)');
-    //     return view('reports.CheckList', ['hierachy' => $hierachy, 'menu' => $menu, 'years' => $years]);
-    // }
+    public function CheckListReportPage()
+    {
+        $menu = $this->menuReports();
+        $hierachy = json_decode(json_encode($this->getHierachy()));
+        $years = DB::select('SELECT YEAR(fechaGenerada) as year FROM checklist_generados GROUP BY YEAR(fechaGenerada)');
+        return view('reports.CheckList', ['hierachy' => $hierachy, 'menu' => $menu, 'years' => $years]);
+    }
 
     // public function CheckListInci()
     // {
@@ -185,12 +185,12 @@ class ReportsController extends Controller
     //     return $reporte->runReport();
     // }
 
-    // public function GuestWeekPage()
-    // {
-    //     $menu = $this->menuReports();
-    //     $hierachy = json_decode(json_encode($this->getHierachy()));
-    //     return view('reports.GuestWeek', ['hierachy' => $hierachy, 'menu' => $menu]);
-    // }
+    public function GuestWeekPage()
+    {
+        $menu = $this->menuReports();
+        $hierachy = json_decode(json_encode($this->getHierachy()));
+        return view('reports.GuestWeek', ['hierachy' => $hierachy, 'menu' => $menu]);
+    }
 
 
     // public function VentasSucPage()
@@ -309,28 +309,28 @@ class ReportsController extends Controller
         );
     }
 
-    // public function getHierachy()
-    // {
+    public function getHierachy()
+    {
 
-    //     $sql = "SELECT empresas.* FROM dashboard_empresa_usuario INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE idUsuario = ?;";
-    //     $empresas = DB::select($sql, [Auth::id()]);
-    //     $hierachy = array();
+        $sql = "SELECT empresas.* FROM dashboard_empresa_usuario INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE idUsuario = ?;";
+        $empresas = DB::select($sql, [Auth::id()]);
+        $hierachy = array();
 
-    //     foreach ($empresas as $empresa) {
-    //         if (session('RepRole') == 1)
-    //             $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1);
-    //         if (session('RepRole') > 1)
-    //             $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND id IN (" . session('sucursales') . ") AND estado = 1 AND idTipo > 0 ORDER BY nombre;";
-    //         else
-    //             $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND estado = 1 AND idTipo > 0 ORDER BY nombre;";
-    //         $sucursales = DB::select($sql, [$empresa->idEmpresa]);
+        foreach ($empresas as $empresa) {
+            if (session('RepRole') == 1)
+                $hierachy[] = array("id" => $empresa->idEmpresa, "nombre" => $empresa->empresa, "tipo" => 1);
+            if (session('RepRole') > 1)
+                $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND id IN (" . session('sucursales') . ") AND estado = 1 AND idTipo > 0 ORDER BY nombre;";
+            else
+                $sql = "SELECT * FROM sucursales WHERE idEmpresa = ? AND estado = 1 AND idTipo > 0 ORDER BY nombre;";
+            $sucursales = DB::select($sql, [$empresa->idEmpresa]);
 
-    //         foreach ($sucursales as $sucursal) {
-    //             $hierachy[] = array("id" => $sucursal->idMicros, "nombre" => $sucursal->nombre, "tipo" => 2);
-    //         }
-    //     }
-    //     return $hierachy;
-    // }
+            foreach ($sucursales as $sucursal) {
+                $hierachy[] = array("id" => $sucursal->idMicros, "nombre" => $sucursal->nombre, "tipo" => 2);
+            }
+        }
+        return $hierachy;
+    }
 
     // public function getHierachyVue()
     // {

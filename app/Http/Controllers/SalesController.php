@@ -22,33 +22,33 @@ class SalesController extends Controller
 {
     public function __construct()
     {
-        // $this->middleware('auth', ['except' => ['get', 'getArcos', 'getEke', 'getHA', 'getCYS', 'set', 'setIscam', 'sendXlsCash', 'getXlsCash', 'getXlsSlTxTp', 'sendEKEItemReport']]);
-        // $this->middleware(function ($request, $next) {
-            //$idUsuario = Auth::id();
-            // $idUsuario = 1;
-            // $user = Auth::user();
-            // $sql = "SELECT * FROM config_app_access WHERE idUsuario = ? AND idAplicacion = 6; ";
-            // $accesQuery = DB::select($sql, [$idUsuario]);
-            // if (!empty($accesQuery) || $idUsuario == 8) {
-            //     if ($idUsuario == 8) {
-            //         session(['DASHRole' => 1]);
-            //     } else {
-            //         session(['DASHRole' => $accesQuery[0]->idRole]);
-            //     }
+        $this->middleware('auth', ['except' => ['get', 'getArcos', 'getEke', 'getHA', 'getCYS', 'set', 'setIscam', 'sendXlsCash', 'getXlsCash', 'getXlsSlTxTp', 'sendEKEItemReport']]);
+        $this->middleware(function ($request, $next) {
+            $idUsuario = Auth::id();
+            $idUsuario = 1;
+            $user = Auth::user();
+            $sql = "SELECT * FROM config_app_access WHERE idUsuario = ? AND idAplicacion = 6; ";
+            $accesQuery = DB::select($sql, [$idUsuario]);
+            if (!empty($accesQuery) || $idUsuario == 8) {
+                if ($idUsuario == 8) {
+                    session(['DASHRole' => 1]);
+                } else {
+                    session(['DASHRole' => $accesQuery[0]->idRole]);
+                }
 
-            //     if (!empty($accesQuery[0]) && $accesQuery[0]->idRole != 1 && $accesQuery[0]->idRole != 6 && $idUsuario != 8) {
+                if (!empty($accesQuery[0]) && $accesQuery[0]->idRole != 1 && $accesQuery[0]->idRole != 6 && $idUsuario != 8) {
 
-            //         $sql = "SELECT group_concat( `idSucursal` separator ',') as `sucursales` FROM dashboard_sucursal_usuario INNER JOIN sucursales ON sucursales.id = dashboard_sucursal_usuario.idSucursal  WHERE sucursales.idTipo>0 AND idUsuario = ? GROUP BY idUsuario;";
+                    $sql = "SELECT group_concat( `idSucursal` separator ',') as `sucursales` FROM dashboard_sucursal_usuario INNER JOIN sucursales ON sucursales.id = dashboard_sucursal_usuario.idSucursal  WHERE sucursales.idTipo>0 AND idUsuario = ? GROUP BY idUsuario;";
 
-            //         $sucursales = DB::select($sql, [$idUsuario]);
-            //         if (!empty($sucursales)) {
-            //             session(['sucursales' => $sucursales[0]->sucursales]);
-            //         }
-            //     }
-            // }
+                    $sucursales = DB::select($sql, [$idUsuario]);
+                    if (!empty($sucursales)) {
+                        session(['sucursales' => $sucursales[0]->sucursales]);
+                    }
+                }
+            }
 
-        //     return $next($request);
-        // });
+            return $next($request);
+        });
     }
 
     public function getEke(Request $request)

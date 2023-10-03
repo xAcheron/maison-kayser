@@ -135,8 +135,8 @@ class UserLocation
     public function getHierachy2($onlyCompanies = 0)
     {
         $sql = "SELECT empresas.* FROM dashboard_empresa_usuario INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE idUsuario = ?;";
-        //$empresas = DB::select($sql, [Auth::id()]);
-        $empresas = DB::select($sql, [1]);
+        $empresas = DB::select($sql, [Auth::id()]);
+        //$empresas = DB::select($sql, [1]);
         $hierachy = array();
 
         if ($onlyCompanies == 0) {
@@ -185,8 +185,8 @@ class UserLocation
     public function getHierachy3($onlyCompanies = 0)
     {
         $sql = "SELECT empresas.* FROM dashboard_empresa_usuario INNER JOIN empresas ON empresas.idEmpresa = dashboard_empresa_usuario.idEmpresa WHERE idUsuario = ?;";
-        //$empresas = DB::select($sql, [Auth::id()]);
-        $empresas = DB::select($sql, [1]);
+        $empresas = DB::select($sql, [Auth::id()]);
+        //$empresas = DB::select($sql, [1]);
         $hierachy = array();
 
         if ($onlyCompanies == 0) {

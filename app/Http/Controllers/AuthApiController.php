@@ -35,13 +35,13 @@ class AuthApiController extends Controller
                 ->where('email', $user->email)
                 ->get();
         }
-
-        $tokenResult = $user->createToken('Personal Access Token');
-        $token = $tokenResult->token;
-        if ($request->remember_me) {
-            $token->expires_at = Carbon::now()->addWeeks(4);
-        }
-        $token->save();
+        // dd($user);
+        // $tokenResult = $user->createToken('Personal Access Token');
+        // $token = $tokenResult->token;
+        // if ($request->remember_me) {
+        //     $token->expires_at = Carbon::now()->addWeeks(4);
+        // }
+        // $token->save();
         return response()->json([
             'id' => Auth::user()->id,
             'nombre' => Auth::user()->name,
@@ -49,10 +49,10 @@ class AuthApiController extends Controller
             'area' => Auth::user()->idArea,
             'idTipo' => Auth::user()->idTipo,
             'idProveedor' => $idProveedor[0]->idProveedor ?? 0,
-            'access_token' => $tokenResult->accessToken,
+            'access_token' => $user->remember_token,
             'token_type'   => 'Bearer',
             'expires_at'   => Carbon::parse(
-                $tokenResult->token->expires_at
+                // $tokenResult->token->expires_at
             )
                 ->toDateTimeString(),
         ]);
